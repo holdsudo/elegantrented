@@ -6,6 +6,7 @@ import { getSettings, settingNumber } from "@/lib/settings";
 import { getPublicGown, listGownPhotos, pendingRequestCounts, takenGownIds } from "@/lib/queries";
 import { JsonLd, breadcrumbSchema, gownSchema } from "@/lib/schema-org";
 import { RequestForm } from "../request-form";
+import { GownStage } from "@/components/showroom/gown-stage";
 
 export const dynamic = "force-dynamic";
 
@@ -96,7 +97,13 @@ export default async function GownPage({
               />
             ))
           ) : (
-            <div className="placeholder-shot">{gown.number}</div>
+            // No photograph yet, so the gown itself is shown — built from its
+            // own description, on a turntable. The moment a real photo exists
+            // the branch above wins and this never renders.
+            <GownStage
+              gown={{ id: gown.id, description: gown.description, color: gown.color }}
+              fallbackLabel={gown.number}
+            />
           )}
         </div>
 

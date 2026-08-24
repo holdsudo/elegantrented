@@ -1092,3 +1092,48 @@ input[type="file"] { font-size: 13px; }
   .sr-card, .sr-reticle, .ea-glyph::after { transition: none; }
   .sr-mark { animation: none; border-top-color: rgba(201, 188, 168, .3); }
 }
+
+/* ---- the turntable, where a gown has no photograph yet ---- */
+
+.gown-viewer {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  border-radius: var(--radius);
+  overflow: hidden;
+  /* The same ground the plinths stand on in the atelier, so a gown looks like
+     the same object in both places rather than two different renderings. */
+  background:
+    radial-gradient(120% 78% at 50% 12%, #FFFDF8 0%, #F4EDE1 46%, #E4D9C7 100%);
+  border: 1px solid var(--border-soft);
+  display: grid;
+  place-items: center;
+  cursor: grab;
+  touch-action: pan-y;
+}
+.gown-viewer:active { cursor: grabbing; }
+.gown-viewer-stage { position: absolute; inset: 0; }
+
+/* Sits behind the canvas and shows through until it paints, so there is never
+   an empty box — and stays for good if WebGL never arrives. */
+.gown-viewer-number {
+  font-family: var(--display);
+  font-size: 3rem;
+  color: var(--faint);
+  pointer-events: none;
+}
+
+.gown-viewer-cue {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  font-size: 10.5px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--faint);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gown-viewer-cue { transition: none; }
+}

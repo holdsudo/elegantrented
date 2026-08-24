@@ -19,7 +19,7 @@
  */
 
 import type * as THREE from "three";
-import { silhouetteProfile, type GarmentSpec } from "@/lib/garment";
+import { necklineAt, silhouetteProfile, type GarmentSpec } from "@/lib/garment";
 import { drape } from "./simulate";
 
 /**
@@ -205,6 +205,12 @@ export function buildClothGeometry(
 
     // The bodice is seamed to shape and does not drape; only the skirt is free.
     isPinned: (ring) => at(ring).y >= 0.74,
+
+    // Cut a real neckline instead of ending in a flat band, which is what made
+    // every gown in the collection strapless regardless of its description.
+    necklineAt: (theta) => necklineAt(spec, theta),
+    radiusAtHeight: (h) => silhouetteRadiusAt(h) * options.radius,
+    height: options.height,
 
     random: rng(spec.seed),
     iterations: 8

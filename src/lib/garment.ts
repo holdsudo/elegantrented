@@ -318,6 +318,57 @@ export function bodiceTop(spec: GarmentSpec): number {
   }
 }
 
+/**
+ * The neckline, as a curve rather than a height.
+ *
+ * `bodiceTop` gives the single height a neckline reaches; this gives where the
+ * cloth actually ends at each angle around the body, which is what makes a
+ * neckline a neckline. Cut as a flat ring at one height, every gown in the
+ * collection is strapless — one specific neckline, and not the common one.
+ *
+ * Angle 0 is the front of the garment and PI the back, so a V cuts down the
+ * front only, and a sweetheart dips at both centres while peaking at the sides
+ * where it is held up.
+ *
+ * Returns a height fraction of the whole garment, 0 at the hem, 1 at the
+ * shoulder.
+ */
+export function necklineAt(spec: GarmentSpec, theta: number): number {
+  const top = bodiceTop(spec);
+  // +1 at the front, -1 at the back, 0 at the sides.
+  const front = Math.cos(theta);
+  // +1 at both centres, -1 at both sides.
+  const centres = Math.cos(theta * 2);
+
+  switch (spec.neckline) {
+    // Two lobes at the centre front, riding up over the bust at the sides.
+    case "sweetheart":
+      return top - 0.05 * centres;
+
+    // A single deep cut down the front, and nothing at the back.
+    case "vneck":
+      return top - 0.14 * Math.max(0, front) ** 1.6;
+
+    // Sits off the shoulders: level, a little lower, and the same all round.
+    case "offShoulder":
+      return top - 0.02;
+
+    // Rises to the neck at the front, cut away at the back.
+    case "halter":
+      return top + 0.1 * Math.max(0, front) ** 2 - 0.06 * Math.max(0, -front);
+
+    // Past the collarbone, level.
+    case "highneck":
+      return top;
+
+    // A straight band, which is what strapless actually is — but never
+    // perfectly straight, or it reads as a machined edge rather than a hem.
+    case "strapless":
+    default:
+      return top - 0.012 * centres;
+  }
+}
+
 /** A short, human label — "Mermaid · satin" — for captions and alt text. */
 export function garmentLabel(spec: GarmentSpec): string {
   const shapes: Record<Silhouette, string> = {

@@ -59,6 +59,20 @@ export type DrapeOptions = {
    * sheet thrown over a stand.
    */
   isPinned?: (ring: number) => boolean;
+  /**
+   * The neckline, as the height fraction where the cloth ends at a given angle.
+   *
+   * Without this every gown is strapless, because a grid of rings ends in a
+   * flat band all the way round — which is one specific neckline and not the
+   * one most gowns have. Rings above the line collapse onto it, so the top edge
+   * follows a real curve: a sweetheart dips at the centre and peaks at the
+   * sides, a V cuts down the front, a high neck runs past the collarbone.
+   */
+  necklineAt?: (theta: number) => number;
+  /** Silhouette radius in METRES at a height fraction, for the shaped edge. */
+  radiusAtHeight?: (fraction: number) => number;
+  /** Total garment height, so the neckline fraction can be resolved. */
+  height?: number;
   /** Deterministic 0..1 source, so a gown drapes identically every visit. */
   random: () => number;
   /** Solver effort. More is smoother and slower. */
@@ -91,6 +105,22 @@ export function drape(options: DrapeOptions): Float32Array {
     for (let column = 0; column < columns; column += 1) {
       const theta = (column / columns) * Math.PI * 2;
 
+      // Cut the neckline.
+      //
+      // Rings above the line are collapsed onto it rather than removed, which
+      // leaves zero-area triangles above the edge — invisible, and far simpler
+      // than re-indexing the mesh per column. The radius comes from wherever
+      // the edge actually landed, so the cut follows the body.
+      let cutY = y;
+      let cutRadius = radius;
+      if (options.necklineAt && options.radiusAtHeight && options.height) {
+        const limit = options.necklineAt(theta) * options.height;
+        if (y > limit) {
+          cutY = limit;
+          cutRadius = options.radiusAtHeight(limit / options.height);
+        }
+      }
+
       // Start on the silhouette, with a whisper of noise.
       //
       // A perfectly regular start is a perfectly unstable one: the surplus has
@@ -99,10 +129,10 @@ export function drape(options: DrapeOptions): Float32Array {
       // fabric is never laid on perfectly. This is the symmetry break.
       const jitter = 1 + (random() - 0.5) * 0.02 * (fullness - 1 + 0.06);
 
-      const r = radius * jitter;
+      const r = cutRadius * jitter;
       const i = index(ring, column) * 3;
       position[i] = Math.cos(theta) * r;
-      position[i + 1] = y;
+      position[i + 1] = cutY;
       position[i + 2] = Math.sin(theta) * r * depthRatio;
 
       previous[i] = position[i];

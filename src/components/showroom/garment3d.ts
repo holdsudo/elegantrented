@@ -18,7 +18,7 @@
  */
 
 import type * as THREE from "three";
-import { bodiceTop, type GarmentSpec } from "@/lib/garment";
+import { bodiceTop, necklineAt, type GarmentSpec } from "@/lib/garment";
 import { buildClothGeometry, buildFormGeometry, DEPTH_RATIO } from "./cloth";
 
 /** Physical size of a gown on its form, in metres. */
@@ -196,6 +196,47 @@ export function buildGarment(
     disposables.materials.push(overMaterial);
 
     group.add(new three.Mesh(over, overMaterial));
+  }
+
+  // Straps, where the gown has them.
+  //
+  // A neckline curve alone cannot hold a halter up, and an off-shoulder gown is
+  // defined by the band that sits below the shoulder rather than by the cut of
+  // its bodice. Both are separate pieces on a real garment and both are
+  // separate geometry here — small, but they are the whole difference between
+  // "strapless gown" and the five different necklines the shop actually writes.
+  if (spec.neckline === "halter" || spec.neckline === "offShoulder") {
+    const strapMaterial = material.clone();
+    strapMaterial.side = three.DoubleSide;
+    disposables.materials.push(strapMaterial);
+
+    if (spec.neckline === "halter") {
+      // Two straps from the front of the bodice up to the nape.
+      const top = necklineAt(spec, 0) * GOWN_HEIGHT;
+      for (const side of [-1, 1]) {
+        const path = new three.CatmullRomCurve3([
+          new three.Vector3(GOWN_RADIUS * 0.22 * side, top - 0.02, GOWN_RADIUS * 0.16),
+          new three.Vector3(GOWN_RADIUS * 0.2 * side, top + 0.12, GOWN_RADIUS * 0.05),
+          new three.Vector3(GOWN_RADIUS * 0.1 * side, top + 0.2, -GOWN_RADIUS * 0.08)
+        ]);
+        const strap = new three.TubeGeometry(path, 18, 0.012, 6, false);
+        disposables.geometries.push(strap);
+        const mesh = new three.Mesh(strap, strapMaterial);
+        mesh.castShadow = true;
+        group.add(mesh);
+      }
+    } else {
+      // A band around the arms, sitting below the shoulder — a flattened torus
+      // rather than a ring, because it follows the same ellipse the body does.
+      const band = new three.TorusGeometry(GOWN_RADIUS * 0.42, 0.016, 8, 48);
+      disposables.geometries.push(band);
+      const mesh = new three.Mesh(band, strapMaterial);
+      mesh.rotation.x = Math.PI / 2;
+      mesh.scale.z = DEPTH_RATIO;
+      mesh.position.y = necklineAt(spec, 0) * GOWN_HEIGHT + 0.055;
+      mesh.castShadow = true;
+      group.add(mesh);
+    }
   }
 
   // Beading is not a texture at this range — it is points of light caught on the

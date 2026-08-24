@@ -903,3 +903,192 @@ input[type="file"] { font-size: 13px; }
   line-height: 1.25;
 }
 .chart-value .cell-sub { font-weight: 400; }
+
+/* ================================================================ showroom
+
+   The walkable atelier and its overlay.
+
+   Everything here sits above the page rather than replacing it: the catalogue
+   is still in the document underneath, which is what keeps the collection
+   crawlable and keeps a no-JavaScript visitor whole. Nothing in this block is
+   loaded or painted until someone opens the door.                          */
+
+/* ---- the door ---- */
+
+.enter-atelier { position: relative; padding-left: 26px; }
+.ea-glyph {
+  width: 15px; height: 15px; flex: 0 0 15px;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  position: relative;
+  opacity: .85;
+}
+/* A doorway: a frame with one leaf standing open. */
+.ea-glyph::after {
+  content: "";
+  position: absolute; inset: 2px 5px 0 2px;
+  border-left: 1.5px solid currentColor;
+  border-top: 1.5px solid currentColor;
+  transform: skewY(-14deg);
+  transform-origin: left bottom;
+}
+.enter-atelier:hover .ea-glyph::after { transform: skewY(-22deg); }
+.ea-glyph::after { transition: transform .4s var(--ease); }
+
+/* ---- the overlay ---- */
+
+.showroom {
+  position: fixed; inset: 0; z-index: 900;
+  background: #161210;
+  overscroll-behavior: none;
+  animation: sr-open .5s var(--ease) both;
+}
+@keyframes sr-open { from { opacity: 0; } to { opacity: 1; } }
+
+.showroom-canvas { position: absolute; inset: 0; cursor: grab; }
+.showroom-canvas:active { cursor: grabbing; }
+
+/* ---- the wait ---- */
+
+.showroom-loading {
+  position: absolute; inset: 0;
+  display: grid; place-content: center; justify-items: center; gap: 20px;
+  color: #C9BCA8;
+  font-family: var(--display);
+  font-size: 1.3rem;
+  letter-spacing: .04em;
+}
+.showroom-loading p { margin: 0; }
+.sr-mark {
+  width: 30px; height: 30px;
+  border: 1px solid rgba(201, 188, 168, .3);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: sr-turn 1.1s linear infinite;
+}
+@keyframes sr-turn { to { transform: rotate(360deg); } }
+
+/* ---- reticle ---- */
+
+.sr-reticle {
+  position: absolute; left: 50%; top: 50%;
+  width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
+  background: rgba(255, 248, 236, .32);
+  transition: transform .3s var(--ease), background .3s var(--ease);
+  pointer-events: none;
+}
+.sr-reticle.on { transform: scale(2.4); background: var(--primary); }
+
+/* ---- chrome ---- */
+
+.sr-exit, .sr-hint {
+  position: absolute;
+  font-family: var(--font);
+  font-size: 12.5px;
+  letter-spacing: .04em;
+  color: rgba(247, 241, 231, .74);
+}
+.sr-exit {
+  top: 22px; right: 22px;
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 10px 18px;
+  border-radius: 100px;
+  border: 1px solid rgba(247, 241, 231, .2);
+  background: rgba(22, 18, 16, .5);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  transition: background .3s var(--ease), border-color .3s var(--ease);
+}
+.sr-exit:hover { background: rgba(22, 18, 16, .82); border-color: rgba(247, 241, 231, .42); }
+
+.sr-hint { bottom: 24px; left: 50%; transform: translateX(-50%); pointer-events: none; opacity: .62; }
+.sr-hint span { display: inline-flex; align-items: center; gap: 5px; }
+
+.showroom kbd {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(247, 241, 231, .26);
+  background: rgba(247, 241, 231, .08);
+  color: inherit;
+}
+
+/* ---- thumb-stick ---- */
+
+.sr-stick {
+  position: absolute; left: 46px; bottom: 92px;
+  width: 74px; height: 74px; margin: -37px 0 0 -37px;
+  border-radius: 50%;
+  border: 1px solid rgba(247, 241, 231, .22);
+  background: rgba(22, 18, 16, .3);
+  display: grid; place-items: center;
+  pointer-events: none;
+}
+.sr-stick-knob {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: rgba(247, 241, 231, .5);
+}
+
+/* ---- the gown in front of you ---- */
+
+.sr-card {
+  position: absolute; left: 50%; bottom: 76px;
+  transform: translate(-50%, 14px);
+  width: min(400px, calc(100vw - 40px));
+  display: grid; gap: 5px; justify-items: center;
+  padding: 22px 26px 20px;
+  border-radius: 16px;
+  border: 1px solid rgba(247, 241, 231, .16);
+  background: rgba(20, 16, 13, .72);
+  backdrop-filter: blur(14px);
+  color: #F7F1E7;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .34s var(--ease), transform .34s var(--ease);
+}
+.sr-card.in { opacity: 1; transform: translate(-50%, 0); }
+
+.sr-card-no {
+  font-family: var(--mono);
+  font-size: 10.5px; letter-spacing: .24em;
+  color: var(--primary);
+}
+.sr-card strong {
+  font-family: var(--display);
+  font-size: 1.5rem; font-weight: 400; line-height: 1.2;
+}
+.sr-card-detail {
+  font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+  color: rgba(247, 241, 231, .55);
+}
+.sr-card-price { margin-top: 4px; font-size: 15px; font-weight: 600; }
+.sr-card-status {
+  margin-top: 6px;
+  font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase;
+}
+.sr-card-status.free { color: #8FBF86; }
+.sr-card-status.taken { color: rgba(247, 241, 231, .45); }
+.sr-card-cue {
+  margin-top: 10px;
+  font-size: 11px; letter-spacing: .1em;
+  color: rgba(247, 241, 231, .42);
+}
+
+@media (max-width: 640px) {
+  .sr-card { bottom: 22px; padding: 16px 20px 15px; }
+  .sr-card strong { font-size: 1.28rem; }
+  .sr-hint { bottom: 8px; font-size: 11px; }
+  .sr-stick { bottom: 128px; }
+}
+
+/* Someone who asked for less motion still gets the room — the door is a
+   deliberate act, not an autoplay — but nothing fades or drifts on its own. */
+@media (prefers-reduced-motion: reduce) {
+  .showroom { animation: none; }
+  .sr-card, .sr-reticle, .ea-glyph::after { transition: none; }
+  .sr-mark { animation: none; border-top-color: rgba(201, 188, 168, .3); }
+}

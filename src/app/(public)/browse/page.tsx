@@ -4,6 +4,8 @@ import { formatMoney } from "@/lib/money";
 import { getSettings, settingNumber } from "@/lib/settings";
 import { firstPhotoIds, listPublicGowns, pendingRequestCounts, takenGownIds } from "@/lib/queries";
 import { JsonLd, breadcrumbSchema, collectionSchema } from "@/lib/schema-org";
+import { EnterAtelier } from "@/components/showroom/enter-atelier";
+import type { ShowroomGown } from "@/components/showroom/atelier";
 
 export const dynamic = "force-dynamic";
 
@@ -73,6 +75,23 @@ export default async function BrowsePage({
   const thumbnails = await firstPhotoIds(filtered.map((gown) => gown.id));
   const availableCount = filtered.filter((gown) => !taken.has(gown.id)).length;
 
+  // The same gowns the catalogue below lists, in the shape the showroom wants.
+  // Built here on the server so the room needs no extra request to open, and
+  // deliberately derived from `filtered` — walking the atelier shows exactly
+  // what the visitor filtered for, never a different collection.
+  const showroomGowns: ShowroomGown[] = filtered.map((gown) => ({
+    id: gown.id,
+    number: gown.number,
+    description: gown.description,
+    color: gown.color,
+    size: gown.size,
+    price: formatMoney(gown.priceCents, settings.currency),
+    photoUrl: thumbnails.get(gown.id) ? `/api/public/photos/${thumbnails.get(gown.id)}` : null,
+    availability: partyDate ? (taken.has(gown.id) ? "taken" : "free") : "unknown"
+  }));
+
+  const dateQuery = params.date ? `?date=${encodeURIComponent(params.date)}` : "";
+
   return (
     <>
       <JsonLd
@@ -98,7 +117,11 @@ export default async function BrowsePage({
             date and see precisely what is free — no guesswork, no holding pattern.
           </p>
           <div className="hero-actions">
-            <a href="#collection" className="btn-lux">
+            {/* The room first, the list second — but the list is a plain anchor
+                to server-rendered markup, so it works with no JavaScript at
+                all and the door simply does not appear. */}
+            <EnterAtelier gowns={showroomGowns} dateQuery={dateQuery} />
+            <a href="#collection" className="btn-lux ghost">
               View the collection
             </a>
             {settings.shopPhone ? (

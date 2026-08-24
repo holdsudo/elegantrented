@@ -4,7 +4,7 @@ import { formatMoney } from "@/lib/money";
 import { getSettings, settingNumber } from "@/lib/settings";
 import { firstPhotoIds, listPublicGowns, pendingRequestCounts, takenGownIds } from "@/lib/queries";
 import { JsonLd, breadcrumbSchema, collectionSchema } from "@/lib/schema-org";
-import { EnterLookbook } from "@/components/lookbook/enter-lookbook";
+import { CollectionReel } from "@/components/lookbook/collection-reel";
 import type { CollectionGown } from "@/lib/collection";
 import { GownSilhouette } from "@/components/gown-silhouette";
 
@@ -117,22 +117,16 @@ export default async function BrowsePage({
             A considered collection, kept immaculately, released one evening at a time. Choose your
             date and see precisely what is free — no guesswork, no holding pattern.
           </p>
-          <div className="hero-actions">
-            {/* The room first, the list second — but the list is a plain anchor
-                to server-rendered markup, so it works with no JavaScript at
-                all and the door simply does not appear. */}
-            <EnterLookbook gowns={collection} dateQuery={dateQuery} />
-            <a href="#collection" className="btn-lux ghost">
-              The collection
-            </a>
-            {settings.shopPhone ? (
-              <a href={`tel:${settings.shopPhone.replace(/[^\d+]/g, "")}`} className="btn-lux ghost">
-                Speak with us
-              </a>
-            ) : null}
-          </div>
+          {/* No buttons. The gowns are directly below and the page says so by
+              showing them, which is the only invitation a scroll needs. */}
+          <span className="hero-cue" aria-hidden="true" />
         </div>
       </section>
+
+      {/* The collection, one gown at a time, as the visitor scrolls. Server
+          rendered like everything else, so the photographs and their alt text
+          are in the HTML whether or not the script ever runs. */}
+      <CollectionReel gowns={collection} dateQuery={dateQuery} />
 
       <section className="shop-section tight" id="collection">
         <div className="section-head">

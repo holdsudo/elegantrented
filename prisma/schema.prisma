@@ -1,0 +1,196 @@
+// Rental Ledger — schema.
+//
+// Targets Cloudflare D1, which is SQLite. Two consequences worth knowing:
+//
+//  * SQLite has no enum type, so the columns that were enums are plain strings.
+//    Their allowed values live in src/lib/enums.ts as TypeScript unions, which
+//    is where they get enforced now.
+//  * SQLite has no date type. Calendar days are stored as DateTime and pinned to
+//    UTC midnight by src/lib/dates.ts — which is what the app already did under
+//    Postgres, so nothing about the behaviour changes.
+//
+// Money is integer cents everywhere.
+
+// The newer `prisma-client` generator emits a pure-TypeScript client with no
+// Rust query engine, and can target the Workers runtime directly. The older
+// `prisma-client-js` generator looks for a native engine binary at runtime,
+// which doesn't exist on Workers — every request 500s.
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+  runtime  = "workerd"
+  // No Rust engine at all — queries compile to SQL in TypeScript.
+  engineType = "client"
+}
+
+datasource db {
+  provider = "sqlite"
+  // Only used by the Prisma CLI when generating migration SQL. At runtime the
+  // D1 binding supplies the connection, not this URL.
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  name           String
+  passwordHash   String
+  sessionVersion Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Gown {
+  id          String   @id @default(cuid())
+  /// The tag number on the physical garment. What staff says out loud.
+  number      String   @unique
+  description String
+  size        String?
+  color       String?
+  /// Default rental price in cents; auto-fills onto new rentals.
+  priceCents  Int      @default(0)
+  /// GownCondition: NEW | GOOD | FAIR | RETIRED
+  condition   String   @default("GOOD")
+  /// Shown on the public storefront. Retired gowns never show regardless.
+  published   Int      @default(1)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  photos   GownPhoto[]
+  rentals  Rental[]
+  requests BookingRequest[]
+
+  @@index([description])
+}
+
+model GownPhoto {
+  id          String   @id @default(cuid())
+  gownId      String
+  gown        Gown     @relation(fields: [gownId], references: [id], onDelete: Cascade)
+  filename    String
+  contentType String
+  bytes       Int
+  /// PhotoStorage: DB | R2
+  storage     String   @default("DB")
+  /// base64, only when storage is DB (local development)
+  data        String?
+  /// object key, only when storage is R2
+  storageKey  String?
+  createdAt   DateTime @default(now())
+
+  @@index([gownId])
+}
+
+model Rental {
+  id     String @id @default(cuid())
+  /// Sequential, never reused. Displayed as R-1042. Allocated from the Counter
+  /// row below, because SQLite only autoincrements a primary key.
+  number Int    @unique
+
+  customerName String
+  phone        String?
+  email        String?
+
+  /// The day the rental was written up.
+  writtenDate DateTime
+  /// The event. Everything sorts and alerts on this.
+  partyDate   DateTime
+  pickupDate  DateTime?
+  returnDate  DateTime?
+
+  gownId String?
+  gown   Gown?   @relation(fields: [gownId], references: [id], onDelete: SetNull)
+  /// Free text, used when a rental predates the gown record (e.g. imported history).
+  gownText String?
+
+  priceCents Int    @default(0)
+  /// RentalStatus: BOOKED | OUT | RETURNED | CANCELLED
+  status     String @default("BOOKED")
+  notes      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments Payment[]
+
+  @@index([partyDate])
+  @@index([customerName])
+  @@index([gownId])
+}
+
+model Payment {
+  id       String @id @default(cuid())
+  rentalId String
+  rental   Rental @relation(fields: [rentalId], references: [id], onDelete: Cascade)
+
+  amountCents Int
+  method      String   @default("Cash")
+  paidOn      DateTime
+  note        String?
+  createdAt   DateTime @default(now())
+
+  @@index([rentalId])
+}
+
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+/// Backs login throttling. Workers give every request its own isolate, so an
+/// in-memory counter would reset constantly — this has to live in the database.
+model LoginAttempt {
+  id         String   @id @default(cuid())
+  identifier String
+  ip         String
+  success    Boolean
+  createdAt  DateTime @default(now())
+
+  @@index([identifier, createdAt])
+  @@index([ip, createdAt])
+}
+
+/// Atomic sequence generator. `increment` compiles to a single UPDATE, so two
+/// rentals written at the same moment can never be handed the same number.
+model Counter {
+  name  String @id
+  value Int
+}
+
+/// A request from the public storefront.
+///
+/// Deliberately NOT a Rental: only Rentals are consulted when checking whether a
+/// gown is free, so a request never blocks a date. The date is blocked at the
+/// moment the owner confirms, which is what creates the Rental.
+model BookingRequest {
+  id     String  @id @default(cuid())
+  gownId String?
+  gown   Gown?   @relation(fields: [gownId], references: [id], onDelete: SetNull)
+  /// Free text, when the customer asked about something not in the catalogue.
+  gownText String?
+
+  customerName String
+  phone        String?
+  email        String?
+
+  partyDate  DateTime
+  pickupDate DateTime?
+  returnDate DateTime?
+  notes      String?
+
+  /// PENDING | CONFIRMED | DECLINED
+  status String @default("PENDING")
+  /// Set on confirmation; points at the Rental that now holds the date.
+  rentalId String?
+  /// Kept for abuse handling on a public form.
+  ip String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([partyDate])
+  @@index([gownId])
+}

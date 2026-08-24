@@ -1,0 +1,513 @@
+<title>Garment Rental CRM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+:root {
+  --bg:           #F7F3EE;
+  --card:         #FFFFFF;
+  --card-alt:     #FBF7F2;
+  --text:         #2B2118;
+  --muted:        #7C6B5B;
+  --border:       #E4DACE;
+  --border-soft:  #EFE7DD;
+
+  --primary:      #A57C52;
+  --primary-ink:  #7B5735;
+  --primary-soft: #F3E9DE;
+
+  --success:      #4E7B48;
+  --success-soft: #EBF2E9;
+  --warn:         #C68A21;
+  --warn-soft:    #FBF1DD;
+  --danger:       #B3453F;
+  --danger-soft:  #F8EAE9;
+
+  --shadow: 0 1px 2px rgba(43,33,24,.05), 0 10px 30px rgba(43,33,24,.07);
+  --radius: 10px;
+
+  --display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+  --body:    "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono:    "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:           #17120D;
+    --card:         #1F1912;
+    --card-alt:     #271F17;
+    --text:         #F1E9E0;
+    --muted:        #A6947F;
+    --border:       #372D23;
+    --border-soft:  #2B231A;
+    --primary:      #C9A078;
+    --primary-ink:  #DEBD98;
+    --primary-soft: #2C2117;
+    --success:      #6FA867;
+    --success-soft: #1B2719;
+    --warn:         #DFAF52;
+    --warn-soft:    #2B2313;
+    --danger:       #DE7B72;
+    --danger-soft:  #2E1B19;
+    --shadow: 0 1px 2px rgba(0,0,0,.5), 0 12px 34px rgba(0,0,0,.42);
+  }
+}
+:root[data-theme="dark"] {
+  --bg:           #17120D;
+  --card:         #1F1912;
+  --card-alt:     #271F17;
+  --text:         #F1E9E0;
+  --muted:        #A6947F;
+  --border:       #372D23;
+  --border-soft:  #2B231A;
+  --primary:      #C9A078;
+  --primary-ink:  #DEBD98;
+  --primary-soft: #2C2117;
+  --success:      #6FA867;
+  --success-soft: #1B2719;
+  --warn:         #DFAF52;
+  --warn-soft:    #2B2313;
+  --danger:       #DE7B72;
+  --danger-soft:  #2E1B19;
+  --shadow: 0 1px 2px rgba(0,0,0,.5), 0 12px 34px rgba(0,0,0,.42);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 40px 24px 96px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 40px;
+}
+@media (min-width: 1060px) {
+  .wrap { grid-template-columns: 196px minmax(0, 1fr); align-items: start; }
+}
+
+.rail { display: none; }
+@media (min-width: 1060px) {
+  .rail {
+    display: flex; flex-direction: column; gap: 2px;
+    position: sticky; top: 40px; padding-top: 8px;
+  }
+}
+.rail a {
+  color: var(--muted); text-decoration: none; font-size: 13px;
+  padding: 5px 10px; border-radius: 7px;
+  border-left: 2px solid transparent; display: flex; gap: 9px;
+}
+.rail a:hover { color: var(--text); background: var(--card); border-left-color: var(--primary); }
+.rail a span { color: var(--primary-ink); font-family: var(--mono); font-size: 11px; padding-top: 2px; }
+.rail-title {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--muted); padding: 0 10px 10px;
+}
+
+.mast { display: flex; flex-direction: column; gap: 18px; padding-bottom: 30px; }
+.eyebrow {
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted);
+}
+.chip { border: 1px solid var(--border); background: var(--card); border-radius: 100px; padding: 3px 11px; }
+.chip.live { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-ink); }
+h1 {
+  font-family: var(--display); font-weight: 800;
+  font-size: clamp(2.3rem, 5.6vw, 3.6rem); line-height: 1.02;
+  letter-spacing: -.025em; margin: 0; text-wrap: balance;
+}
+.standfirst { max-width: 64ch; font-size: 1.08rem; color: var(--muted); margin: 0; }
+.standfirst strong { color: var(--text); font-weight: 600; }
+
+section { padding: 34px 0; border-top: 1px solid var(--border-soft); }
+.sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+.sec-num { font-family: var(--mono); font-size: 12px; color: var(--primary-ink); padding-top: 4px; }
+h2 {
+  font-family: var(--display); font-weight: 700; font-size: 1.55rem;
+  letter-spacing: -.015em; margin: 0; text-wrap: balance;
+}
+h3 { font-family: var(--display); font-weight: 600; font-size: 1.02rem; margin: 0 0 4px; }
+.lede { color: var(--muted); margin: 0 0 20px; max-width: 68ch; }
+p { max-width: 68ch; }
+a { color: var(--primary-ink); }
+
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px 22px; box-shadow: var(--shadow);
+}
+.grid2 { display: grid; gap: 16px; grid-template-columns: 1fr; }
+@media (min-width: 700px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+
+code, .mono { font-family: var(--mono); font-size: .875em; }
+p code, li code, td code {
+  background: var(--card-alt); border: 1px solid var(--border-soft);
+  border-radius: 5px; padding: 1px 5px;
+}
+pre {
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.65;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px 18px; overflow-x: auto; margin: 0;
+}
+
+.scroller { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); background: var(--card); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; min-width: 560px; }
+th, td { text-align: left; padding: 10px 16px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+th {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .11em;
+  text-transform: uppercase; color: var(--muted); font-weight: 500; background: var(--card-alt);
+}
+tbody tr:last-child td { border-bottom: none; }
+td.mono-cell { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
+td.num { font-variant-numeric: tabular-nums; text-align: right; }
+th.num { text-align: right; }
+.field { font-weight: 600; }
+.auto { color: var(--primary-ink); font-family: var(--mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+
+ul.clean { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+ul.clean li { padding-left: 18px; position: relative; max-width: 68ch; }
+ul.clean li::before {
+  content: ""; position: absolute; left: 0; top: .62em;
+  width: 6px; height: 6px; border-radius: 2px; background: var(--primary);
+}
+
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+.sw { border-radius: 9px; border: 1px solid var(--border); overflow: hidden; background: var(--card); }
+.sw-chip { height: 54px; }
+.sw-meta { padding: 8px 10px; display: flex; flex-direction: column; gap: 1px; }
+.sw-name { font-size: 12px; font-weight: 600; }
+.sw-hex { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+.pill {
+  display: inline-block; font-family: var(--mono); font-size: 11px;
+  letter-spacing: .04em; border-radius: 100px; padding: 2px 9px; white-space: nowrap;
+}
+.pill.paid { background: var(--success-soft); color: var(--success); border: 1px solid var(--success); }
+.pill.due  { background: var(--warn-soft);    color: var(--warn);    border: 1px solid var(--warn); }
+.pill.late { background: var(--danger-soft);  color: var(--danger);  border: 1px solid var(--danger); }
+.pill.out  { background: var(--primary-soft); color: var(--primary-ink); border: 1px solid var(--primary); }
+
+.phase {
+  display: grid; grid-template-columns: 46px 1fr; gap: 16px;
+  padding: 14px 0; border-bottom: 1px solid var(--border-soft); align-items: start;
+}
+.phase:last-child { border-bottom: none; }
+.phase-id {
+  font-family: var(--mono); font-size: 13px; font-weight: 500;
+  color: var(--card); background: var(--text); border-radius: 6px;
+  padding: 4px 0; text-align: center;
+}
+.phase.milestone .phase-id { background: var(--primary); color: #FFFFFF; }
+.phase-name { font-weight: 600; font-size: 15px; }
+.phase-body { color: var(--muted); font-size: 14.5px; }
+
+.note {
+  border: 1px solid var(--border); border-left: 3px solid var(--primary);
+  background: var(--card); border-radius: 0 var(--radius) var(--radius) 0; padding: 16px 20px;
+}
+.note-label {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .13em;
+  text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 6px;
+}
+
+.parked { color: var(--muted); font-size: 14.5px; line-height: 2.05; max-width: 74ch; }
+.parked span {
+  border: 1px dashed var(--border); border-radius: 100px;
+  padding: 3px 10px; margin-right: 4px; white-space: nowrap;
+}
+
+footer {
+  border-top: 1px solid var(--border-soft); margin-top: 34px; padding-top: 20px;
+  color: var(--muted); font-size: 13px; font-family: var(--mono);
+}
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 4px; }
+</style>
+
+<div class="wrap">
+
+<nav class="rail">
+  <div class="rail-title">Contents</div>
+  <a href="#s1"><span>01</span>What it is</a>
+  <a href="#s2"><span>02</span>The record</a>
+  <a href="#s3"><span>03</span>Gowns</a>
+  <a href="#s4"><span>04</span>Screens</a>
+  <a href="#s5"><span>05</span>Color</a>
+  <a href="#s6"><span>06</span>Stack</a>
+  <a href="#s7"><span>07</span>Phases</a>
+  <a href="#s8"><span>08</span>Parked</a>
+  <a href="#s9"><span>09</span>Open</a>
+</nav>
+
+<main>
+  <header class="mast">
+    <div class="eyebrow">
+      <span class="chip live">Scope v2 · supersedes v1</span>
+      <span class="chip">2026-08-21</span>
+      <span class="chip">~/dress-crm</span>
+    </div>
+    <h1>Gown Rental Ledger</h1>
+    <p class="standfirst">You named seven fields: name, date, date of party, number, price, paid,
+    gown description and number. That's a <strong>booking ledger</strong>, not the ten-phase rental
+    platform I scoped first. This version is built around those seven fields, plus just enough
+    system that the ledger can't lie to you.</p>
+  </header>
+
+  <section id="s1" style="border-top:none">
+    <div class="sec-head"><span class="sec-num">01</span><h2>What this is</h2></div>
+    <p class="lede">Every rental is one row. Every gown is a numbered physical thing. The app won't
+    let you promise the same gown to two parties on the same weekend. It runs in a browser on your
+    own hardware — one shop, one login, no branding.</p>
+    <div class="grid2">
+      <div class="card">
+        <h3>Six tables, not thirty-eight</h3>
+        <p style="margin:0;color:var(--muted)"><code>Rental</code> · <code>Gown</code> ·
+        <code>GownPhoto</code> · <code>Payment</code> · <code>User</code> ·
+        <code>AppSetting</code>. Everything in v1 that those seven fields don't need is
+        parked in <a href="#s8">§08</a> — on record, not built.</p>
+      </div>
+      <div class="card">
+        <h3>Still a clean subset</h3>
+        <p style="margin:0;color:var(--muted)">Nothing here forecloses v1. If you later want
+        sizes, fittings, cleaning or a storefront, they layer on top — the data model is a
+        narrower version of the same shape, not a different one.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="s2">
+    <div class="sec-head"><span class="sec-num">02</span><h2>The record</h2></div>
+    <p class="lede">Your seven fields, made concrete. This is the whole product — the rest of this
+    document is how it's presented and kept honest.</p>
+    <div class="scroller">
+      <table>
+        <thead><tr><th>Field</th><th>Stored as</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="field">Rental #</td><td class="mono-cell">auto · R-1042</td><td>Sequential, assigned on save, never reused. What you say on the phone.</td></tr>
+          <tr><td class="field">Name</td><td class="mono-cell">text</td><td>Customer. Searchable.</td></tr>
+          <tr><td class="field">Phone</td><td class="mono-cell">text</td><td>Also searchable — typing <code>5551234</code> finds the rental.</td></tr>
+          <tr><td class="field">Date</td><td class="mono-cell">date · today</td><td>The day the rental was written up.</td></tr>
+          <tr><td class="field">Date of party</td><td class="mono-cell">date</td><td><strong>Everything sorts and alerts on this field.</strong></td></tr>
+          <tr><td class="field">Pickup / Return</td><td class="mono-cell">date · optional</td><td>Auto-suggested from the party date, overridable. Leave blank and the party date carries it.</td></tr>
+          <tr><td class="field">Gown</td><td class="mono-cell">link</td><td>Shows as <code>#118 — Ivory A-line, beaded bodice, size 8</code></td></tr>
+          <tr><td class="field">Price</td><td class="mono-cell">money</td><td>Auto-fills from the gown's default price.</td></tr>
+          <tr><td class="field">Paid</td><td class="mono-cell">money</td><td>Amount received so far.</td></tr>
+          <tr><td class="field">Balance</td><td class="mono-cell">computed</td><td><code>Price − Paid</code>. Never typed.</td></tr>
+          <tr><td class="field">Status</td><td class="mono-cell">derived</td><td><span class="pill paid">Paid in full</span> <span class="pill due">Deposit</span> <span class="pill late">Overdue</span></td></tr>
+          <tr><td class="field">Notes</td><td class="mono-cell">text</td><td>Alterations, referrals, anything.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid2" style="margin-top:18px">
+      <div class="card">
+        <h3>"Number" — I built both</h3>
+        <p style="margin:0;color:var(--muted)">Every rental gets an auto <strong>Rental #</strong>,
+        and there's a separate <strong>Phone</strong> field. Whichever you meant, it's there, and
+        neither one costs anything.</p>
+      </div>
+      <div class="card">
+        <h3>"Paid" — an amount, not a checkbox</h3>
+        <p style="margin:0;color:var(--muted)">Stored as money with the balance computed. A
+        checkbox is just the case where Paid equals Price — so this covers both readings and also
+        answers "who still owes me money" without a second system.</p>
+      </div>
+    </div>
+    <p style="color:var(--muted);font-size:14.5px;margin-top:16px">If <strong>Date</strong> should
+    mean the pickup date rather than the write-up date, that's a one-line change. Say so and I'll
+    flip it.</p>
+  </section>
+
+  <section id="s3">
+    <div class="sec-head"><span class="sec-num">03</span><h2>Gowns</h2></div>
+    <p class="lede">A gown is a numbered physical object, not just text in a row. This is the only
+    thing I've added beyond your list, and it's what makes <em>Gown #</em> mean something.</p>
+    <div class="grid2">
+      <div class="card">
+        <h3>The gown record</h3>
+        <ul class="clean" style="font-size:14.5px;margin-top:10px">
+          <li><strong>Gown #</strong> — the tag number on the garment</li>
+          <li><strong>Description</strong>, size, color</li>
+          <li><strong>Photos</strong> — one or more, uploaded from a phone</li>
+          <li><strong>Default price</strong> — auto-fills on new rentals</li>
+          <li><strong>Condition</strong> — New · Good · Fair · Retired</li>
+          <li><strong>Status</strong> — derived: <span class="pill paid">In</span> <span class="pill out">Out</span> <span class="pill due">Due back</span></li>
+          <li><strong>History</strong> — every rental it's been on, and what it's earned</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>The double-booking check</h3>
+        <p style="color:var(--muted);font-size:14.5px;margin:10px 0 0">Pick a gown for a party date
+        and the app checks whether it's already promised anywhere near that date. If it is, you get
+        a warning naming the other rental and its party date.</p>
+        <p style="color:var(--muted);font-size:14.5px;margin:12px 0 0">You can override it —
+        sometimes you know something the app doesn't — but you'll never do it by accident.</p>
+        <p style="font-size:14.5px;margin:12px 0 0"><strong>This is the most valuable code in the
+        build,</strong> and it only exists because gowns are numbered records instead of typed-in
+        text.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="s4">
+    <div class="sec-head"><span class="sec-num">04</span><h2>Screens</h2></div>
+    <p class="lede">Five, plus settings. That's the whole app.</p>
+
+    <div class="card" style="margin-bottom:16px">
+      <h3>Ledger — the home screen</h3>
+      <p style="color:var(--muted);font-size:14.5px;margin:8px 0 14px">The list, and ninety percent
+      of the use. Columns are exactly your fields.</p>
+      <div class="scroller" style="box-shadow:none">
+        <table style="min-width:660px">
+          <thead>
+            <tr><th>R-#</th><th>Name</th><th>Phone</th><th>Date</th><th>Party</th><th>Gown</th><th class="num">Price</th><th class="num">Paid</th><th class="num">Balance</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="mono-cell">1042</td><td>Maria Colon</td><td class="mono-cell">555-0134</td><td class="mono-cell">08/21</td><td class="mono-cell">09/14</td><td>#118 Ivory A-line</td><td class="num">225.00</td><td class="num">100.00</td><td class="num"><span class="pill due">125.00</span></td></tr>
+            <tr><td class="mono-cell">1041</td><td>Denise Ruiz</td><td class="mono-cell">555-0198</td><td class="mono-cell">08/19</td><td class="mono-cell">08/30</td><td>#204 Champagne mermaid</td><td class="num">310.00</td><td class="num">310.00</td><td class="num"><span class="pill paid">0.00</span></td></tr>
+            <tr><td class="mono-cell">1038</td><td>Alani Pierce</td><td class="mono-cell">555-0172</td><td class="mono-cell">08/02</td><td class="mono-cell">08/16</td><td>#087 Blush ballgown</td><td class="num">275.00</td><td class="num">275.00</td><td class="num"><span class="pill late">Overdue</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul class="clean" style="font-size:14.5px;margin-top:16px">
+        <li>One search box hits name, phone, gown # and description at once</li>
+        <li>Default sort: <strong>party date, soonest first</strong></li>
+        <li>Filters: upcoming · this month · balance due · overdue returns · all</li>
+        <li>Click a row to open it. <strong>Add rental</strong> button top-right. Export to CSV or Excel</li>
+      </ul>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>Rental — add and edit</h3>
+        <p style="margin:8px 0 0;color:var(--muted);font-size:14.5px">One short form, one screen, no
+        tabs. Picking a gown fills the price and runs the double-booking check. Picking a party date
+        suggests pickup and return.</p>
+      </div>
+      <div class="card">
+        <h3>Gowns</h3>
+        <p style="margin:8px 0 0;color:var(--muted);font-size:14.5px">Inventory with photos, numbers
+        and current status. Click one for its full rental history — who wore it, when, what it
+        earned.</p>
+      </div>
+      <div class="card">
+        <h3>Calendar</h3>
+        <p style="margin:8px 0 0;color:var(--muted);font-size:14.5px">Month view of party dates with
+        pickups and returns marked. Answers "what's happening this weekend" without reading the
+        ledger.</p>
+      </div>
+      <div class="card">
+        <h3>Money</h3>
+        <p style="margin:8px 0 0;color:var(--muted);font-size:14.5px">Everyone with a balance,
+        oldest first, total outstanding at the top. Plus <strong>Settings</strong> — shop name,
+        default prices, pickup offsets, users.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="s5">
+    <div class="sec-head"><span class="sec-num">05</span><h2>Color</h2></div>
+    <p class="lede">Light brown primary on warm neutrals — the same airy, white-card layout as v1,
+    dressed differently. This page is rendered in the palette, so what you're reading is the preview.</p>
+    <div class="swatches">
+      <div class="sw"><div class="sw-chip" style="background:#F7F3EE"></div><div class="sw-meta"><span class="sw-name">Ground</span><span class="sw-hex">#F7F3EE</span></div></div>
+      <div class="sw"><div class="sw-chip" style="background:#FFFFFF;border-bottom:1px solid #E4DACE"></div><div class="sw-meta"><span class="sw-name">Card</span><span class="sw-hex">#FFFFFF</span></div></div>
+      <div class="sw"><div class="sw-chip" style="background:#A57C52"></div><div class="sw-meta"><span class="sw-name">Primary</span><span class="sw-hex">#A57C52</span></div></div>
+      <div class="sw"><div class="sw-chip" style="background:#7B5735"></div><div class="sw-meta"><span class="sw-name">Primary ink</span><span class="sw-hex">#7B5735</span></div></div>
+      <div class="sw"><div class="sw-chip" style="background:#F3E9DE;border-bottom:1px solid #E4DACE"></div><div class="sw-meta"><span class="sw-name">Primary soft</span><span class="sw-hex">#F3E9DE</span></div></div>
+      <div class="sw"><div class="sw-chip" style="background:#2B2118"></div><div class="sw-meta"><span class="sw-name">Text</span><span class="sw-hex">#2B2118</span></div></div>
+      <div class="sw"><div class="sw-chip" style="background:#7C6B5B"></div><div class="sw-meta"><span class="sw-name">Muted</span><span class="sw-hex">#7C6B5B</span></div></div>
+      <div class="sw"><div class="sw-chip" style="background:#E4DACE"></div><div class="sw-meta"><span class="sw-name">Border</span><span class="sw-hex">#E4DACE</span></div></div>
+      <div class="sw"><div class="sw-chip" style="background:#4E7B48"></div><div class="sw-meta"><span class="sw-name">Paid</span><span class="sw-hex">#4E7B48</span></div></div>
+      <div class="sw"><div class="sw-chip" style="background:#C68A21"></div><div class="sw-meta"><span class="sw-name">Balance due</span><span class="sw-hex">#C68A21</span></div></div>
+      <div class="sw"><div class="sw-chip" style="background:#B3453F"></div><div class="sw-meta"><span class="sw-name">Overdue</span><span class="sw-hex">#B3453F</span></div></div>
+    </div>
+    <div class="note" style="margin-top:18px">
+      <span class="note-label">Why there are two browns</span>
+      <code>#A57C52</code> is right for buttons and fills but too light for small text on white, so
+      links and labels use <code>#7B5735</code> — same hue, darkened one step. A dark set is defined
+      at the same time so it's never a retrofit, and the primary is overridable in settings, so
+      "light brown" can become anything later without touching code.
+    </div>
+  </section>
+
+  <section id="s6">
+    <div class="sec-head"><span class="sec-num">06</span><h2>Stack</h2></div>
+    <p class="lede">Same as the CAF CRM — proven on this hardware, and I can lift working files
+    straight across.</p>
+    <div class="grid2">
+      <div class="card">
+        <h3>Built on</h3>
+        <ul class="clean" style="font-size:14.5px;margin-top:10px">
+          <li>Next.js 15 · React 19 · TypeScript</li>
+          <li>PostgreSQL via Prisma — <strong>its own database</strong>, nothing shared with CAF</li>
+          <li>One <code>globals.css</code> with custom properties. No Tailwind, no component library</li>
+          <li>Its own Docker container on the Pi, its own port, LAN-only</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Lifted from the CRM</h3>
+        <ul class="clean" style="font-size:14.5px;margin-top:10px">
+          <li><code>lib/auth.ts</code> — signed session cookie login</li>
+          <li><code>lib/file-attachments.ts</code> — gown photos</li>
+          <li><code>lib/csv.ts</code> · <code>spreadsheet.ts</code> — CSV and Excel export</li>
+          <li><code>lib/reference-numbers.ts</code> — the rental numbering</li>
+          <li><code>app-shell.tsx</code> · <code>ui.tsx</code> — nav and badges, restyled to §05</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="s7">
+    <div class="sec-head"><span class="sec-num">07</span><h2>Phases</h2></div>
+    <div class="card" style="padding:6px 22px">
+      <div class="phase milestone"><div class="phase-id">P0</div><div><div class="phase-name">Ledger — usable the day it lands</div><div class="phase-body">App, login, the rental record, add / edit / search / sort / export</div></div></div>
+      <div class="phase"><div class="phase-id">P1</div><div><div class="phase-name">Gowns</div><div class="phase-body">Numbered gowns with photos, gown history, and the double-booking warning</div></div></div>
+      <div class="phase"><div class="phase-id">P2</div><div><div class="phase-name">Money</div><div class="phase-body">Payments against a rental, balance list, printable receipt and rental agreement</div></div></div>
+      <div class="phase"><div class="phase-id">P3</div><div><div class="phase-name">Calendar</div><div class="phase-body">Month view, this-weekend view, optional email or text reminders</div></div></div>
+      <div class="phase"><div class="phase-id">P4</div><div><div class="phase-name">Import</div><div class="phase-body">Pull your existing spreadsheet or paper ledger in, so history isn't lost</div></div></div>
+    </div>
+    <p style="color:var(--muted);font-size:14.5px;margin-top:16px">P0 is small. If what you're using
+    now is a notebook or a spreadsheet, <strong>P0 plus P4 alone replaces it.</strong></p>
+  </section>
+
+  <section id="s8">
+    <div class="sec-head"><span class="sec-num">08</span><h2>Parked</h2></div>
+    <p class="lede">Everything from v1 that these seven fields don't need. On record so nothing is
+    lost, not built unless you ask — and each one layers onto the ledger later without a rewrite.</p>
+    <div class="parked">
+      <span>size variants</span><span>serialized units</span><span>wear counts</span><span>cleaning turnaround</span><span>measurement profiles</span><span>wedding-party group orders</span><span>per-wearer sizing</span><span>alteration queue</span><span>return inspection</span><span>damage charges</span><span>pricing rule engine</span><span>seasonal multipliers</span><span>deposit pre-authorization</span><span>payment processor</span><span>triggered email</span><span>utilization reporting</span><span>size shortage forecast</span><span>public storefront</span><span>self-service booking</span><span>JSON API</span><span>webhooks</span>
+    </div>
+  </section>
+
+  <section id="s9">
+    <div class="sec-head"><span class="sec-num">09</span><h2>Still open</h2></div>
+    <div class="note">
+      <span class="note-label">Answer these and P0 starts</span>
+      <ul class="clean" style="margin-top:4px">
+        <li>Does <strong>Date</strong> mean written-up or pickup?</li>
+        <li>Can one rental include <strong>more than one gown</strong> — a veil, shoes, a second dress? Worth deciding before P0, since it changes the row shape.</li>
+        <li>Do you have a <strong>spreadsheet or ledger to import</strong>?</li>
+        <li>Roughly how many gowns, and how many rentals a month?</li>
+      </ul>
+    </div>
+    <p style="color:var(--muted);font-size:14.5px;margin-top:18px">Assumed unless you say otherwise:
+    one shop, one location · everyone who logs in sees everything · payments are <em>recorded</em>,
+    not processed · LAN-only, no internet exposure, no bridge to CAF.</p>
+  </section>
+
+  <footer>
+    Scope v2 · 2026-08-21 · source of truth: ~/dress-crm/SCOPE.md
+  </footer>
+</main>
+</div>

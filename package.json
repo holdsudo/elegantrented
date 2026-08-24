@@ -1,0 +1,32 @@
+{
+  "name": "rental-ledger",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3400",
+    "build": "next build",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "cf-typegen": "wrangler types",
+    "db:sql": "prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > migrations/0001_init.sql",
+    "db:local": "wrangler d1 execute rental-ledger --local --file=migrations/0001_init.sql",
+    "db:remote": "wrangler d1 execute rental-ledger --remote --file=migrations/0001_init.sql",
+    "seed:sql": "tsx scripts/seed-sql.ts"
+  },
+  "dependencies": {
+    "@opennextjs/cloudflare": "^1.20.2",
+    "bcryptjs": "^3.0.2",
+    "next": "^15.5.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2",
+    "wrangler": "^4.125.0",
+    "prisma": "^6.5.0"
+  }
+}

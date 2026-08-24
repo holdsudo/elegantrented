@@ -1,0 +1,12 @@
+node_modules
+.next
+.open-next
+.wrangler
+src/generated
+.env
+.env.*
+!.env.example
+*.log
+seed.sql
+backups/
+tsconfig.tsbuildinfo

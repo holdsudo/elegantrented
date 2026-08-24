@@ -1,0 +1,44 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "rental-ledger",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-08-01",
+  // nodejs_compat gives the Worker Node's crypto and Buffer, which Prisma,
+  // bcryptjs and the session signing all rely on.
+  "compatibility_flags": ["nodejs_compat"],
+
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+
+  "observability": {
+    "enabled": true
+  },
+
+  // The database. `database_id` is filled in by `wrangler d1 create rental-ledger`.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "rental-ledger",
+      "database_id": "63ce669a-ff39-40e5-934b-4f5211cf0785",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // Gown photos live in D1 alongside everything else. R2 would be the better
+  // home, but enabling it requires a card on file, so this account stores photos
+  // in the database instead — 5 GB of D1 holds tens of thousands of them at the
+  // size the browser downscaler produces.
+  //
+  // To move to R2 later: enable R2 on the account, create the bucket, and
+  // uncomment this block. The code picks the bucket up automatically, and photos
+  // already in D1 keep working because each row records how it was stored.
+  //
+  // "r2_buckets": [
+  //   { "binding": "PHOTOS", "bucket_name": "gown-photos" }
+  // ]
+
+  // SESSION_SECRET is NOT set here — it is a secret, not config.
+  // Set it once with:  npx wrangler secret put SESSION_SECRET
+}

@@ -12,20 +12,20 @@
  * The room is an enhancement. Every gown in it is also a server-rendered link in
  * the catalogue underneath, so a crawler, a reader with JavaScript off, and a
  * visitor whose GPU refuses the context all still get the whole collection.
+ *
+ * On the chrome: there is deliberately no crosshair, no key hints and no
+ * on-screen stick. See `tour.ts` — this is a walkthrough, and everything the
+ * visitor sees on top of the room is a caption or a way to move between gowns,
+ * not an instrument panel.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import type * as THREE from "three";
 import { garmentLabel } from "@/lib/garment";
-import {
-  buildAtelier,
-  PLINTH_COLLISION_RADIUS,
-  REACH,
-  type Atelier,
-  type ShowroomGown
-} from "./atelier";
-import { createControls, type Controls } from "./controls";
+import { buildAtelier, type Atelier, type ShowroomGown } from "./atelier";
+import { createTour, type Station, type Tour } from "./tour";
 
 type Props = {
   gowns: ShowroomGown[];
@@ -36,8 +36,9 @@ type Props = {
   onUnsupported: () => void;
 };
 
-/** What the visitor is standing in front of, if anything. */
+/** The gown the visitor has walked up to. */
 type Focus = {
+  index: number;
   id: string;
   number: string;
   description: string;
@@ -49,34 +50,33 @@ type Focus = {
 export default function Showroom({ gowns, dateQuery, onExit, onUnsupported }: Props) {
   const router = useRouter();
   const mountRef = useRef<HTMLDivElement | null>(null);
+  const tourRef = useRef<Tour | null>(null);
+
   const [ready, setReady] = useState(false);
   const [focus, setFocus] = useState<Focus | null>(null);
-  const [stick, setStick] = useState<{ x: number; y: number } | null>(null);
-  const [isTouch, setIsTouch] = useState(false);
+  const [moved, setMoved] = useState(false);
 
-  // The focused gown is read by the click handler, which is created once. A ref
-  // keeps it current without rebuilding the whole scene on every focus change.
   const focusRef = useRef<Focus | null>(null);
   focusRef.current = focus;
 
-  const open = useCallback(() => {
-    const current = focusRef.current;
-    if (!current) return;
-    router.push(`/browse/${current.id}${dateQuery}`);
-  }, [router, dateQuery]);
+  const open = useCallback(
+    (id: string) => {
+      router.push(`/browse/${id}${dateQuery}`);
+    },
+    [router, dateQuery]
+  );
 
   useEffect(() => {
     let disposed = false;
     let frame = 0;
     let renderer: THREE.WebGLRenderer | null = null;
     let atelier: Atelier | null = null;
-    let controls: Controls | null = null;
+    let tour: Tour | null = null;
     let onResize: (() => void) | null = null;
+    let detachClick: (() => void) | null = null;
 
     const mount = mountRef.current;
     if (!mount) return;
-
-    setIsTouch(window.matchMedia("(pointer: coarse)").matches);
 
     (async () => {
       const three = await import("three");
@@ -101,9 +101,6 @@ export default function Showroom({ gowns, dateQuery, onExit, onUnsupported }: Pr
         return;
       }
 
-      // A context can be created and still be a software rasteriser that will
-      // not hold 30fps. There is no honest way to detect that up front, so the
-      // frame-rate governor below handles it instead.
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, quality === "high" ? 2 : 1.5));
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.shadowMap.enabled = quality === "high";
@@ -116,7 +113,7 @@ export default function Showroom({ gowns, dateQuery, onExit, onUnsupported }: Pr
       renderer.domElement.style.touchAction = "none";
 
       const camera = new three.PerspectiveCamera(
-        62,
+        56,
         window.innerWidth / window.innerHeight,
         0.1,
         140
@@ -124,15 +121,77 @@ export default function Showroom({ gowns, dateQuery, onExit, onUnsupported }: Pr
 
       atelier = buildAtelier(three, renderer, gowns, quality);
 
-      controls = createControls(three, camera, renderer.domElement, atelier.entrance, {
-        bounds: atelier.bounds,
-        obstacles: atelier.stands.map((stand) => ({
-          x: stand.position.x,
-          z: stand.position.z,
-          radius: PLINTH_COLLISION_RADIUS
-        })),
+      // Where the visitor stands for each gown, and what they look at there.
+      //
+      // Two things are being balanced. The stop leans toward the gown's own side
+      // of the aisle so the walk weaves between them rather than running straight
+      // down the middle — and it stays short of the gown, about two and a half
+      // metres back, so the whole garment is in frame with room around it.
+      // Standing any closer puts the visitor's nose in the skirt: the gown fills
+      // the screen, the silhouette is lost, and you cannot see the thing you
+      // came to look at.
+      const stations: Station[] = atelier.stands.map((stand) => ({
+        stop: new three.Vector3(stand.position.x * 0.3, 0, stand.position.z + 1.9),
+        regard: new three.Vector3(stand.position.x, 1.12, stand.position.z),
+        object: stand.group
+      }));
+
+      tour = createTour(three, camera, renderer.domElement, atelier.entrance, stations, {
         reducedMotion
       });
+      tourRef.current = tour;
+
+      /* ------------------------------------------------- click to walk */
+
+      const raycaster = new three.Raycaster();
+      const pointer = new three.Vector2();
+      let downAt = { x: 0, y: 0 };
+
+      const onPointerDown = (event: PointerEvent) => {
+        downAt = { x: event.clientX, y: event.clientY };
+      };
+
+      const onClick = (event: MouseEvent) => {
+        if (!atelier || !tour) return;
+        // A drag that ended over a gown is a glance, not a choice.
+        if (Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) > 6) return;
+
+        pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+        pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        raycaster.setFromCamera(pointer, camera);
+
+        const hits = raycaster.intersectObjects(
+          atelier.stands.map((stand) => stand.group),
+          true
+        );
+        if (hits.length === 0) return;
+
+        // Which stand did we hit? Walk up to the group we registered.
+        let node: THREE.Object3D | null = hits[0].object;
+        while (node && !stations.some((station) => station.object === node)) {
+          node = node.parent;
+        }
+        if (!node) return;
+
+        const index = stations.findIndex((station) => station.object === node);
+        if (index < 0) return;
+
+        // Clicking the gown you are already standing at opens it; clicking one
+        // further down the aisle walks you there first. Nobody should have to
+        // arrive before they are allowed to say "that one".
+        if (focusRef.current?.index === index) {
+          open(atelier.stands[index].gown.id);
+        } else {
+          tour.goTo(index);
+        }
+      };
+
+      renderer.domElement.addEventListener("pointerdown", onPointerDown);
+      renderer.domElement.addEventListener("click", onClick);
+      detachClick = () => {
+        renderer?.domElement.removeEventListener("pointerdown", onPointerDown);
+        renderer?.domElement.removeEventListener("click", onClick);
+      };
 
       onResize = () => {
         if (!renderer) return;
@@ -147,79 +206,52 @@ export default function Showroom({ gowns, dateQuery, onExit, onUnsupported }: Pr
       /* ------------------------------------------------------- the loop */
 
       const clock = new three.Clock();
-      const facing = new three.Vector3();
-      const toStand = new three.Vector3();
 
-      // Frame-rate governor: if the device cannot hold up, drop resolution once
-      // rather than letting it grind. Measured over a second so a single slow
-      // frame during load does not trigger it.
       let sampleStart = performance.now();
       let sampleFrames = 0;
       let degraded = false;
 
-      let focusPoll = 0;
-      let lastFocusId: string | null = null;
+      let poll = 0;
+      let lastIndex: number | null = null;
+      let lastMoved = false;
 
       const tick = () => {
-        if (disposed || !renderer || !atelier || !controls) return;
+        if (disposed || !renderer || !atelier || !tour) return;
         frame = requestAnimationFrame(tick);
 
         const delta = clock.getDelta();
-        controls.update(delta);
+        tour.update(delta);
 
-        // What is the visitor standing in front of? Proximity and facing, not a
-        // raycast — in a room you turn toward a gown to consider it, and the
-        // cheaper test matches that behaviour more closely than a pixel-exact
-        // crosshair would.
-        focusPoll += delta;
-        if (focusPoll > 0.1) {
-          focusPoll = 0;
-          camera.getWorldDirection(facing);
+        poll += delta;
+        if (poll > 0.08) {
+          poll = 0;
 
-          let best: (typeof atelier.stands)[number] | null = null;
-          let bestScore = 0;
-
-          for (const stand of atelier.stands) {
-            toStand.set(
-              stand.position.x - camera.position.x,
-              0,
-              stand.position.z - camera.position.z
-            );
-            const distance = toStand.length();
-            if (distance > REACH) continue;
-            toStand.normalize();
-            const alignment = toStand.dot(facing);
-            if (alignment < 0.35) continue;
-            const score = alignment * (1 - distance / REACH);
-            if (score > bestScore) {
-              bestScore = score;
-              best = stand;
+          const index = tour.focusIndex();
+          if (index !== lastIndex) {
+            lastIndex = index;
+            if (index === null) {
+              setFocus(null);
+            } else {
+              const stand = atelier.stands[index];
+              setFocus({
+                index,
+                id: stand.gown.id,
+                number: stand.gown.number,
+                description: stand.gown.description,
+                detail: [stand.gown.size ? `Size ${stand.gown.size}` : null, garmentLabel(stand.spec)]
+                  .filter(Boolean)
+                  .join(" · "),
+                price: stand.gown.price,
+                availability: stand.gown.availability
+              });
             }
           }
 
-          const nextId = best?.gown.id ?? null;
-          if (nextId !== lastFocusId) {
-            lastFocusId = nextId;
-            setFocus(
-              best
-                ? {
-                    id: best.gown.id,
-                    number: best.gown.number,
-                    description: best.gown.description,
-                    detail: [
-                      best.gown.size ? `Size ${best.gown.size}` : null,
-                      garmentLabel(best.spec)
-                    ]
-                      .filter(Boolean)
-                      .join(" · "),
-                    price: best.gown.price,
-                    availability: best.gown.availability
-                  }
-                : null
-            );
+          const hasMoved = tour.hasMoved();
+          if (hasMoved !== lastMoved) {
+            lastMoved = hasMoved;
+            setMoved(hasMoved);
           }
-
-          setStick(controls.stick());
         }
 
         renderer.render(atelier.scene, camera);
@@ -252,7 +284,9 @@ export default function Showroom({ gowns, dateQuery, onExit, onUnsupported }: Pr
       disposed = true;
       cancelAnimationFrame(frame);
       if (onResize) window.removeEventListener("resize", onResize);
-      controls?.dispose();
+      detachClick?.();
+      tour?.dispose();
+      tourRef.current = null;
       atelier?.dispose();
       if (renderer) {
         renderer.domElement.remove();
@@ -262,29 +296,49 @@ export default function Showroom({ gowns, dateQuery, onExit, onUnsupported }: Pr
         renderer.forceContextLoss();
       }
     };
-  }, [gowns, onUnsupported]);
+  }, [gowns, onUnsupported, open]);
 
-  // The page behind must not scroll while the visitor is walking, and Escape
-  // should always get them out.
+  // The page behind must not scroll while the visitor is in the room, and the
+  // arrow keys should move between gowns the way the buttons do.
   useEffect(() => {
-    const previous = document.body.style.overflow;
+    // Both elements, not just body: which one actually scrolls depends on the
+    // document, and locking the wrong one leaves the page free to scroll away
+    // underneath the room.
+    const previousBody = document.body.style.overflow;
+    const previousRoot = document.documentElement.style.overflow;
     document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
 
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onExit();
-      if (event.key === "Enter" && focusRef.current) open();
+      if (event.key === "ArrowRight" || event.key === "ArrowDown") tourRef.current?.step(1);
+      if (event.key === "ArrowLeft" || event.key === "ArrowUp") tourRef.current?.step(-1);
     };
     window.addEventListener("keydown", onKey);
 
     return () => {
-      document.body.style.overflow = previous;
+      document.body.style.overflow = previousBody;
+      document.documentElement.style.overflow = previousRoot;
       window.removeEventListener("keydown", onKey);
     };
-  }, [onExit, open]);
+  }, [onExit]);
 
-  return (
-    <div className="showroom" role="dialog" aria-modal="true" aria-label="The atelier, in three dimensions">
-      <div className="showroom-canvas" ref={mountRef} onClick={focus ? open : undefined} />
+  // Rendered into <body>, not where it sits in the tree.
+  //
+  // The door lives in `.hero-actions`, and `.hero` declares both
+  // `isolation: isolate` and `overflow: hidden`. A fullscreen overlay left
+  // inside it is clipped to the hero and its z-index is scoped to the hero's
+  // stacking context, so the catalogue further down the page paints straight
+  // over the top of the room. No z-index can win that argument from inside;
+  // the overlay has to leave the subtree.
+  return createPortal(
+    <div
+      className="showroom"
+      role="dialog"
+      aria-modal="true"
+      aria-label="The atelier — a walkthrough of the collection"
+    >
+      <div className="showroom-canvas" ref={mountRef} />
 
       {!ready ? (
         <div className="showroom-loading">
@@ -295,60 +349,75 @@ export default function Showroom({ gowns, dateQuery, onExit, onUnsupported }: Pr
 
       {ready ? (
         <>
-          {/* The reticle. Small, and it only asserts itself when there is
-              something to look at. */}
-          <div className={focus ? "sr-reticle on" : "sr-reticle"} aria-hidden="true" />
-
-          <button type="button" className="sr-exit" onClick={onExit}>
+          <button type="button" className="sr-leave" onClick={onExit}>
             Leave the atelier
-            <kbd>Esc</kbd>
           </button>
 
-          <div className="sr-hint" aria-hidden="true">
-            {isTouch ? (
-              <span>Left thumb to walk · drag to look</span>
-            ) : (
-              <span>
-                <kbd>W</kbd>
-                <kbd>A</kbd>
-                <kbd>S</kbd>
-                <kbd>D</kbd> to walk · drag to look
-              </span>
-            )}
+          {/* The invitation to start walking, retired the moment they do. */}
+          <div className={moved ? "sr-invite gone" : "sr-invite"} aria-hidden="true">
+            <span className="sr-invite-line" />
+            Scroll to walk through
           </div>
 
-          {/* The thumb-stick, drawn only while a thumb is actually down. */}
-          {stick ? (
-            <div className="sr-stick" aria-hidden="true">
-              <span
-                className="sr-stick-knob"
-                style={{ transform: `translate(${stick.x * 22}px, ${stick.y * 22}px)` }}
-              />
-            </div>
-          ) : null}
-
-          {/* The card for the gown in front of you. This is the whole point of
-              the room, so it is the only element allowed to be loud. */}
-          <div className={focus ? "sr-card in" : "sr-card"} aria-live="polite">
+          {/* The caption for the gown you have stopped at. Editorial, not a
+              heads-up display: a name, what it is, what it costs, and a way in. */}
+          <div className={focus ? "sr-plate in" : "sr-plate"} aria-live="polite">
             {focus ? (
               <>
-                <span className="sr-card-no">No. {focus.number}</span>
+                <span className="sr-plate-no">No. {focus.number}</span>
                 <strong>{focus.description}</strong>
-                <span className="sr-card-detail">{focus.detail}</span>
-                <span className="sr-card-price">{focus.price}</span>
-                {focus.availability !== "unknown" ? (
-                  <span className={`sr-card-status ${focus.availability}`}>
-                    {focus.availability === "free" ? "Free that weekend" : "Spoken for"}
-                  </span>
-                ) : null}
-                <span className="sr-card-cue">
-                  {isTouch ? "Tap to see it properly" : "Click to see it properly"}
+                <span className="sr-plate-detail">{focus.detail}</span>
+                <span className="sr-plate-price">
+                  {focus.price}
+                  {focus.availability !== "unknown" ? (
+                    <em className={focus.availability}>
+                      {focus.availability === "free" ? "Free that weekend" : "Spoken for"}
+                    </em>
+                  ) : null}
                 </span>
+                <button type="button" className="sr-plate-open" onClick={() => open(focus.id)}>
+                  See this gown
+                </button>
               </>
             ) : null}
           </div>
+
+          {/* Where you are in the collection, and a way to step between gowns
+              without walking the whole aisle. */}
+          <nav className="sr-rail" aria-label="Gowns in the collection">
+            <button
+              type="button"
+              className="sr-rail-step"
+              onClick={() => tourRef.current?.step(-1)}
+              aria-label="Previous gown"
+            >
+              ‹
+            </button>
+            <ol>
+              {gowns.map((gown, index) => (
+                <li key={gown.id}>
+                  <button
+                    type="button"
+                    className={focus?.index === index ? "on" : undefined}
+                    onClick={() => tourRef.current?.goTo(index)}
+                    aria-label={`Walk to ${gown.description}`}
+                    aria-current={focus?.index === index ? "true" : undefined}
+                  />
+                </li>
+              ))}
+            </ol>
+            <button
+              type="button"
+              className="sr-rail-step"
+              onClick={() => tourRef.current?.step(1)}
+              aria-label="Next gown"
+            >
+              ›
+            </button>
+          </nav>
         </>
       ) : null}
-    </div>
+    </div>,
+    document.body
   );
 }

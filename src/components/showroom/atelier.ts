@@ -18,6 +18,7 @@
 import type * as THREE from "three";
 import { garmentLabel, garmentSpec, type GarmentSpec } from "@/lib/garment";
 import { buildGarment, disposeGarment, type BuiltGarment } from "./garment3d";
+import { buildPhotoGown, loadCutout, type PhotoGown } from "./photo-gown";
 import {
   brassSurface,
   marbleSurface,
@@ -597,6 +598,9 @@ export function buildAtelier(
   track.materials.push(plinthMaterial);
 
   const stands: Stand[] = [];
+  const reflections = new Map<number, THREE.Object3D>();
+  const photoGowns: PhotoGown[] = [];
+  let disposed = false;
 
   gowns.forEach((gown, index) => {
     const spec = garmentSpec(gown);
@@ -684,9 +688,67 @@ export function buildAtelier(
       // Drawn before the floor, which then blends over it as polish.
       reflection.renderOrder = -1;
       scene.add(reflection);
+      reflections.set(index, reflection);
     }
 
     stands.push({ gown, spec, position: new three.Vector3(x, 0, z), group, built });
+
+    // If the shop has photographed this gown, that photograph is the gown.
+    //
+    // The generated garment is put up immediately so the room is never empty,
+    // and quietly stood down the moment the real one arrives. Loading is per
+    // gown and never blocks the walk: a visitor can be halfway down the aisle
+    // before the far end has finished resolving, and nothing about that is
+    // visible to them beyond a dress becoming a photograph.
+    if (gown.photoUrl) {
+      void loadCutout(three, gown.photoUrl).then((cutout) => {
+        if (!cutout || disposed) {
+          cutout?.texture.dispose();
+          return;
+        }
+
+        // A key that ate almost everything, or almost nothing, did not work —
+        // a gown photographed against a busy background, or one that fills the
+        // frame edge to edge. The generated garment is better than a rectangle
+        // of somebody's wall, so it stays.
+        if (cutout.coverage < 0.06 || cutout.coverage > 0.94) {
+          cutout.texture.dispose();
+          return;
+        }
+
+        const photo = buildPhotoGown(three, cutout, 1.42);
+        photo.group.position.y = PLINTH_HEIGHT;
+        photoGowns.push(photo);
+
+        if (built) built.group.visible = false;
+        group.add(photo.group);
+
+        // The reflection has to become the photograph too, or the floor carries
+        // a dress that is no longer standing on the plinth.
+        const reflection = reflections.get(index);
+        if (reflection) {
+          reflection.visible = false;
+          const mirrored = buildPhotoGown(three, cutout, 1.42);
+          mirrored.group.position.y = PLINTH_HEIGHT;
+          mirrored.group.scale.y = -1;
+          mirrored.group.traverse((node) => {
+            const mesh = node as THREE.Mesh;
+            if (!mesh.isMesh) return;
+            const faded = (mesh.material as THREE.Material).clone();
+            faded.transparent = true;
+            faded.opacity = 0.26;
+            faded.depthWrite = false;
+            faded.side = three.DoubleSide;
+            mesh.material = faded;
+            mesh.castShadow = false;
+            track.materials.push(faded);
+          });
+          mirrored.group.renderOrder = -1;
+          photoGowns.push(mirrored);
+          group.add(mirrored.group);
+        }
+      });
+    }
   });
 
   const builtGarments = stands.map((stand) => stand.built).filter(Boolean) as BuiltGarment[];
@@ -697,6 +759,8 @@ export function buildAtelier(
     bounds: { x: HALL_HALF_WIDTH - 0.5, z: halfLength - 0.5 },
     entrance: new three.Vector3(0, 0, halfLength - 1.8),
     dispose() {
+      disposed = true;
+      for (const photo of photoGowns) photo.dispose();
       for (const garment of builtGarments) disposeGarment(garment);
       for (const geometry of track.geometries) geometry.dispose();
       for (const material of track.materials) material.dispose();

@@ -172,11 +172,18 @@ export function buildGarment(
   if (spec.fabric === "tulle") {
     const over = buildClothGeometry(
       three,
-      // A different seed gives the overlay its own fold pattern, so the two
-      // layers cross rather than sitting in register — which is the entire
-      // visual point of an overlay.
-      { ...spec, seed: (spec.seed + 0.41) % 1, folds: Math.round(spec.folds * 0.55) },
-      { height: GOWN_HEIGHT * 0.985, radius: GOWN_RADIUS * 1.05, rings: 56, columns: 96 }
+      // A different seed drapes the overlay differently, so the two layers
+      // cross rather than settling into register — which is the entire visual
+      // point of an overlay.
+      { ...spec, seed: (spec.seed + 0.41) % 1 },
+      {
+        height: GOWN_HEIGHT * 0.985,
+        radius: GOWN_RADIUS * 1.04,
+        rings: 44,
+        columns: 80,
+        // Gauze carries even more surplus than the lining under it.
+        fullnessScale: 1.12
+      }
     );
     disposables.geometries.push(over);
 

@@ -1,37 +1,37 @@
 /**
- * Cloth geometry that is not a solid of revolution.
+ * Cloth geometry, from simulation rather than description.
  *
- * The previous garments were lathes — a profile swept around an axis — and that
- * is the single reason they read as turned vases rather than as dresses. Three
- * things follow from a lathe and all three are fatal:
+ * Two things were wrong with every earlier version and both are fixed here.
  *
- *   - The cross-section is a circle. No torso is circular. A body is an ellipse
- *     about seven parts wide to five deep, and getting that one ratio right
- *     does more for the read than any material work.
- *   - It is perfectly symmetric. Real cloth hangs unevenly, leans, and never
- *     matches itself across the middle.
- *   - Folds applied to it are a sine wave: the same depth, evenly spaced, all
- *     the way round. Real gathers are irregular, and they *converge* — many
- *     shallow folds at the hem merging into fewer deep ones at the waist,
- *     because that is where the fabric is being held.
+ * The first was that the garments were lathes — a profile swept around an axis.
+ * A lathe is a vase: circular in section, mirror-symmetric, and no torso is
+ * either. A body is an ellipse about seven parts wide to five deep, and that one
+ * ratio does more for the read than any material work.
  *
- * So the skirt is built as a proper grid here, and the folds are a field rather
- * than a wave. It costs more vertices and it is worth every one of them.
+ * The second, and the bigger one, was that the folds came from a formula. A
+ * formula gives you the folds you asked for, evenly, forever. Cloth does not
+ * fold because someone specified folds; it folds because it has more material
+ * than it needs and gravity has to put the surplus somewhere. So the fullness is
+ * declared here — how much more fabric than the silhouette strictly needs — and
+ * `simulate.ts` is left to find out where it goes.
+ *
+ * That is the whole difference between fabric and a moulded shell.
  */
 
 import type * as THREE from "three";
-import { bodiceTop, silhouetteProfile, type GarmentSpec } from "@/lib/garment";
+import { silhouetteProfile, type GarmentSpec } from "@/lib/garment";
+import { drape } from "./simulate";
 
 /**
  * How deep a body is relative to how wide.
  *
  * The most important constant in this file. A circular cross-section is what
- * makes a swept garment look like it was turned on a lathe; roughly 0.72 is
- * what a human torso and a tailor's form actually measure.
+ * makes a garment look turned on a lathe; roughly 0.72 is what a human torso
+ * and a tailor's form actually measure.
  */
 export const DEPTH_RATIO = 0.72;
 
-/** A tiny seeded generator, so every gown falls the same way on every visit. */
+/** A tiny seeded generator, so every gown drapes the same way on every visit. */
 function rng(seed: number) {
   let state = Math.floor(seed * 2 ** 31) || 1;
   return () => {
@@ -42,64 +42,72 @@ function rng(seed: number) {
   };
 }
 
-/** Smooth periodic noise around the body, built from harmonics. */
-type FoldField = {
-  /** Displacement at angle theta, at height fraction h (0 hem, 1 shoulder). */
-  at: (theta: number, h: number) => number;
-};
+/**
+ * The landmarks of a dress form, as radius against height 0..1.
+ *
+ * Hip, waist, under-bust, bust, chest, shoulder, and the cut where the neck
+ * begins. Shared by the form's own geometry and by the solver's collision test,
+ * so cloth can never end up inside the body it is hanging on.
+ */
+const FORM_LANDMARKS: [number, number][] = [
+  [0.2, 0.0],
+  [0.205, 0.08],
+  [0.183, 0.2],
+  [0.163, 0.32],
+  [0.178, 0.42],
+  [0.203, 0.52],
+  [0.196, 0.62],
+  [0.166, 0.72],
+  [0.118, 0.82],
+  [0.086, 0.92],
+  [0.078, 1.0]
+];
+
+/** Linear lookup down the landmarks. */
+function formRadius(fraction: number): number {
+  if (fraction <= 0) return FORM_LANDMARKS[0][0];
+  if (fraction >= 1) return FORM_LANDMARKS[FORM_LANDMARKS.length - 1][0];
+
+  for (let index = 0; index < FORM_LANDMARKS.length - 1; index += 1) {
+    const [r0, h0] = FORM_LANDMARKS[index];
+    const [r1, h1] = FORM_LANDMARKS[index + 1];
+    if (fraction >= h0 && fraction <= h1) {
+      const t = (fraction - h0) / Math.max(h1 - h0, 1e-6);
+      return r0 + (r1 - r0) * t;
+    }
+  }
+  return FORM_LANDMARKS[FORM_LANDMARKS.length - 1][0];
+}
 
 /**
- * The fold field.
+ * How much more fabric than the silhouette needs, at the hem.
  *
- * Built as a stack of harmonics with random phases and uneven amplitudes, so no
- * two folds are the same depth and they do not sit at regular intervals. The
- * frequency is interpolated by height: high near the hem where the fabric has
- * spread out into many small gathers, low near the waist where it has been
- * pulled together into a few deep ones. That convergence is the thing the eye
- * reads as "gathered", and a fixed-frequency wave can never produce it.
+ * This is the single number that decides whether a skirt reads as fabric or as
+ * a moulded shell, and it is a real quantity a cutter works in: a circle skirt
+ * carries far more cloth than its hem circumference strictly requires, a
+ * column carries almost none. Everything the solver produces follows from it.
  */
-function foldField(spec: GarmentSpec): FoldField {
-  const random = rng(spec.seed);
-
-  // Frequencies must be whole numbers or the fold does not close on itself and
-  // leaves a visible seam down one side of the skirt.
-  const hemFolds = Math.max(6, Math.round(spec.folds));
-  const waistFolds = Math.max(3, Math.round(spec.folds * 0.38));
-
-  // Three harmonics per band, each with its own phase and weight.
-  const harmonics = [1, 2, 3].map((multiple) => ({
-    multiple,
-    phase: random() * Math.PI * 2,
-    weight: 1 / multiple + random() * 0.22
-  }));
-
-  // A slow irregular envelope so some quarters of the skirt carry deeper
-  // gathers than others, the way a real skirt does when it has been dressed.
-  const envelopePhase = random() * Math.PI * 2;
-
-  return {
-    at(theta, h) {
-      // Fabric held at the waist and released toward the hem.
-      const spread = 1 - h;
-      const frequency = waistFolds + (hemFolds - waistFolds) * spread;
-
-      let value = 0;
-      let total = 0;
-      for (const harmonic of harmonics) {
-        // Rounding keeps every component periodic over a full turn.
-        const f = Math.max(1, Math.round(frequency * harmonic.multiple));
-        value += Math.sin(theta * f + harmonic.phase) * harmonic.weight;
-        total += harmonic.weight;
-      }
-      value /= total;
-
-      const envelope = 0.72 + 0.28 * Math.sin(theta * 2 + envelopePhase);
-
-      // Remapped to add only: cloth gathers away from the body it hangs on, it
-      // never passes through it.
-      return (value * 0.5 + 0.5) * envelope;
-    }
+function hemFullness(spec: GarmentSpec): number {
+  const bySilhouette: Record<GarmentSpec["silhouette"], number> = {
+    ballgown: 1.55,
+    aline: 1.3,
+    empire: 1.28,
+    mermaid: 1.18,
+    column: 1.08,
+    sheath: 1.05
   };
+
+  const byFabric: Record<GarmentSpec["fabric"], number> = {
+    tulle: 1.16,
+    chiffon: 1.12,
+    lace: 1.04,
+    silk: 1.02,
+    satin: 1.0,
+    beaded: 0.97,
+    velvet: 0.94
+  };
+
+  return 1 + (bySilhouette[spec.silhouette] - 1) * byFabric[spec.fabric];
 }
 
 export type ClothOptions = {
@@ -107,27 +115,31 @@ export type ClothOptions = {
   height: number;
   /** Metres at profile radius 1.0. */
   radius: number;
-  /** Vertical divisions. More gives smoother folds down the drop. */
+  /** Vertical divisions. */
   rings?: number;
   /** Divisions around the body. */
   columns?: number;
+  /** Extra fullness on top of the fabric's own, for overlay layers. */
+  fullnessScale?: number;
 };
 
 /**
- * Build a skirt-and-bodice shell as a grid.
+ * Build a draped garment and hand back the settled mesh.
  *
- * Returned open at the top and closed at nothing — it is a shell, and the
- * material renders it double-sided, which is correct for cloth: you can see the
- * inside of a hem.
+ * Open at the top and closed at nothing — it is a shell, and the material
+ * renders it double-sided, which is correct for cloth: you can see the inside
+ * of a hem.
  */
 export function buildClothGeometry(
   three: typeof THREE,
   spec: GarmentSpec,
   options: ClothOptions
 ): THREE.BufferGeometry {
-  const rings = options.rings ?? 72;
-  const columns = options.columns ?? 128;
+  const rings = options.rings ?? 56;
+  const columns = options.columns ?? 96;
 
+  // Resample the silhouette landmarks into a smooth profile. Straight lines
+  // between landmarks read as a stack of cones.
   const profile = silhouetteProfile(spec);
   const curve = new three.CatmullRomCurve3(
     profile.map((point) => new three.Vector3(point.radius, point.height, 0)),
@@ -137,57 +149,82 @@ export function buildClothGeometry(
   );
   const sampled = curve.getPoints(rings - 1);
 
-  const folds = foldField(spec);
-  const random = rng(spec.seed + 0.37);
+  const at = (ring: number) => sampled[Math.min(Math.max(ring, 0), sampled.length - 1)];
 
-  // A gown on a stand is never perfectly plumb. A slight lean, and a hem that
-  // is a little lower on one side, is most of what stops it reading as a
-  // machined object.
-  const swayAngle = random() * Math.PI * 2;
-  const swayAmount = 0.014 + random() * 0.012;
-  const hemPhase = random() * Math.PI * 2;
+  /** Silhouette radius at a height fraction, by linear scan of the samples. */
+  const silhouetteRadiusAt = (h: number) => {
+    for (let index = 0; index < sampled.length - 1; index += 1) {
+      const a = sampled[index];
+      const b = sampled[index + 1];
+      if (h >= a.y && h <= b.y) {
+        const t = (h - a.y) / Math.max(b.y - a.y, 1e-6);
+        return a.x + (b.x - a.x) * t;
+      }
+    }
+    return h <= sampled[0].y ? sampled[0].x : sampled[sampled.length - 1].x;
+  };
 
-  const top = bodiceTop(spec);
-  const depth = spec.fabric === "tulle" ? 0.02 : spec.fabric === "satin" ? 0.036 : 0.028;
+  const fullness = hemFullness(spec) * (options.fullnessScale ?? 1);
 
-  const positions: number[] = [];
-  const uvs: number[] = [];
+  const settled = drape({
+    rings,
+    columns,
+    heightAt: (ring) => Math.min(Math.max(at(ring).y, 0), 1) * options.height,
+    radiusAt: (ring) => Math.max(at(ring).x, 0.02) * options.radius,
+    // Full at the hem, easing to nothing at the waist: a well-cut gown is
+    // smooth where it is held and carries its surplus lower down. A skirt
+    // gathered evenly all the way up is a dirndl, not a gown.
+    fullnessAt: (ring) => {
+      const h = Math.min(Math.max(at(ring).y, 0), 1);
+      // Clamp BEFORE the exponent, not after. Above the waist the base goes
+      // negative, and a negative number to a fractional power is NaN in
+      // JavaScript — which then propagates into every rest length and quietly
+      // deletes the entire garment.
+      const towardHem = Math.max(0, 1 - h / 0.74);
+      return 1 + (fullness - 1) * Math.min(1, towardHem ** 1.3);
+    },
+    depthRatio: DEPTH_RATIO,
 
+    // The understructure, and it is the reason the gown has a shape at all.
+    //
+    // Cloth hung on a bare form falls straight down — correct physics, wrong
+    // dress. A real ballgown is held out by a petticoat, a mermaid by its own
+    // cut and lining. So the silhouette itself is the floor the fabric cannot
+    // fall inside: it drapes over that shape and puts its surplus into folds
+    // outside it, which is exactly what happens over a real underskirt.
+    formRadiusAt: (height) => {
+      const h = Math.min(Math.max(height / options.height, 0), 1);
+      const understructure = silhouetteRadiusAt(h) * options.radius * 0.97;
+
+      // Above the waist the body is wider than any lining, so the torso wins.
+      const fraction = (height - options.height * 0.5) / (options.height * 0.55);
+      const body = fraction < 0 ? 0 : formRadius(Math.min(fraction, 1)) * 0.7;
+
+      return Math.max(understructure, body);
+    },
+
+    // The bodice is seamed to shape and does not drape; only the skirt is free.
+    isPinned: (ring) => at(ring).y >= 0.74,
+
+    random: rng(spec.seed),
+    iterations: 8
+  });
+
+  const positions = new Float32Array(rings * (columns + 1) * 3);
+  const uvs = new Float32Array(rings * (columns + 1) * 2);
+
+  // Re-emit with a duplicated seam column so the texture wraps without a join.
   for (let ring = 0; ring < rings; ring += 1) {
-    const point = sampled[Math.min(ring, sampled.length - 1)];
-    const h = Math.min(Math.max(point.y, 0), 1);
-    const baseRadius = Math.max(point.x, 0.02) * options.radius;
-
-    // Slack accumulates downward — a bodice is fitted and stays smooth.
-    const heightFraction = Math.min(Math.max(h / Math.max(top, 0.01), 0), 1);
-    const slack = (1 - heightFraction) ** 1.5;
-
-    // The hem does not sit level; a full skirt undulates where it breaks.
-    const hemDrop = ring === 0 ? 0 : 0;
-
     for (let column = 0; column <= columns; column += 1) {
-      const theta = (column / columns) * Math.PI * 2;
+      const source = (ring * columns + (column % columns)) * 3;
+      const target = (ring * (columns + 1) + column) * 3;
+      positions[target] = settled[source];
+      positions[target + 1] = settled[source + 1];
+      positions[target + 2] = settled[source + 2];
 
-      const fold = folds.at(theta, h) * depth * slack;
-      const radius = baseRadius + fold;
-
-      // Elliptical, not circular. This is the line that stops it being a vase.
-      let x = Math.cos(theta) * radius;
-      let z = Math.sin(theta) * radius * DEPTH_RATIO;
-
-      // Lean, growing toward the hem where the weight is.
-      const lean = swayAmount * (1 - heightFraction) ** 2;
-      x += Math.cos(swayAngle) * lean;
-      z += Math.sin(swayAngle) * lean;
-
-      const y =
-        h * options.height +
-        hemDrop +
-        // Hem undulation, only right at the bottom of the drop.
-        (ring < 3 ? Math.sin(theta * 3 + hemPhase) * 0.012 * (1 - ring / 3) : 0);
-
-      positions.push(x, y, z);
-      uvs.push(column / columns, h);
+      const uv = (ring * (columns + 1) + column) * 2;
+      uvs[uv] = column / columns;
+      uvs[uv + 1] = ring / (rings - 1);
     }
   }
 
@@ -204,8 +241,8 @@ export function buildClothGeometry(
   }
 
   const geometry = new three.BufferGeometry();
-  geometry.setAttribute("position", new three.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute("uv", new three.Float32BufferAttribute(uvs, 2));
+  geometry.setAttribute("position", new three.BufferAttribute(positions, 3));
+  geometry.setAttribute("uv", new three.BufferAttribute(uvs, 2));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   return geometry;
@@ -214,34 +251,17 @@ export function buildClothGeometry(
 /**
  * A dress form with human proportions.
  *
- * Also elliptical, and cut with an actual waist, bust and shoulder rather than
- * the gentle bulge a lathe profile gives. It is only ever seen above the
- * neckline, but that is exactly the part a viewer reads as "a body" or "a
- * bottle", so it is worth the landmarks.
+ * Elliptical, and cut with an actual waist, bust and shoulder rather than the
+ * gentle bulge a lathe profile gives. It is only ever seen above the neckline,
+ * but that is exactly the part a viewer reads as "a body" or "a bottle".
  */
 export function buildFormGeometry(
   three: typeof THREE,
   scale: number,
   height: number
 ): THREE.BufferGeometry {
-  // Landmarks up a real form: hip, waist, under-bust, bust, chest, shoulder,
-  // and the cut where the neck begins.
-  const landmarks: [number, number][] = [
-    [0.2, 0.0],
-    [0.205, 0.08],
-    [0.183, 0.2],
-    [0.163, 0.32],
-    [0.178, 0.42],
-    [0.203, 0.52],
-    [0.196, 0.62],
-    [0.166, 0.72],
-    [0.118, 0.82],
-    [0.086, 0.92],
-    [0.078, 1.0]
-  ];
-
   const curve = new three.CatmullRomCurve3(
-    landmarks.map(([radius, y]) => new three.Vector3(radius * scale, y, 0)),
+    FORM_LANDMARKS.map(([radius, y]) => new three.Vector3(radius * scale, y, 0)),
     false,
     "catmullrom",
     0.5
@@ -258,7 +278,6 @@ export function buildFormGeometry(
     const point = sampled[Math.min(ring, sampled.length - 1)];
     for (let column = 0; column <= columns; column += 1) {
       const theta = (column / columns) * Math.PI * 2;
-      // Slightly flatter front-to-back than the cloth, as a body is.
       positions.push(
         Math.cos(theta) * point.x,
         point.y * height,

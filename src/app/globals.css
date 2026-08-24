@@ -1137,3 +1137,18 @@ input[type="file"] { font-size: 13px; }
 @media (prefers-reduced-motion: reduce) {
   .gown-viewer-cue { transition: none; }
 }
+
+/* ---- the flat silhouette, in catalogue cards and back-office thumbnails ---- */
+
+.gown-sil { width: 100%; height: 100%; display: block; }
+
+/* The card's own tinted ground would fight the silhouette's, so it gives way. */
+.lux-shot .gown-sil, .gown-thumb .gown-sil { background: transparent; }
+.gown-thumb:has(.gown-sil) { background: var(--card-alt); }
+.lux-card:hover .gown-sil { transform: scale(1.03); }
+.gown-sil { transition: transform .6s var(--ease); }
+
+@media (prefers-reduced-motion: reduce) {
+  .gown-sil { transition: none; }
+  .lux-card:hover .gown-sil { transform: none; }
+}

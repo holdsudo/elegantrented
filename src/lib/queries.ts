@@ -830,14 +830,42 @@ export async function listGownPhotos(gownId: string): Promise<GownPhoto[]> {
   );
 }
 
-/** Ids only — used for the thumbnail on list screens. */
+/**
+ * Photos written by `scripts/make-placeholders.mjs` rather than by the shop.
+ *
+ * That script marks its output in the filename precisely so it can be found and
+ * replaced later, which is the contract this honours: a generated stand-in is
+ * not a photograph of the gown, so the drawn silhouette — which is at least
+ * derived from the gown's real description — is shown in preference to it.
+ *
+ * Nothing is deleted. The rows stay, the admin still lists and can remove them,
+ * and the moment a real photograph is uploaded it outranks both.
+ */
+export const PLACEHOLDER_PREFIX = "placeholder-";
+
+export function isPlaceholderPhoto(photo: { filename: string }): boolean {
+  return photo.filename.startsWith(PLACEHOLDER_PREFIX);
+}
+
+/**
+ * The thumbnail for each gown on list screens: its earliest real photograph.
+ *
+ * Note what this is not — `MIN(id)`. Grouping on the smallest id returns the
+ * lexicographically smallest UUID, which has nothing to do with which photo the
+ * shop uploaded first, and an ORDER BY inside the subquery does not survive the
+ * GROUP BY to fix it. The window function actually orders by time, with the id
+ * only as a tiebreak so the choice is at least stable between requests.
+ */
 export async function firstPhotoIds(gownIds: string[]): Promise<Map<string, string>> {
   if (gownIds.length === 0) return new Map();
   const rows = await all<{ gownId: string; id: string }>(
-    `SELECT gownId, MIN(id) AS id FROM (
-       SELECT gownId, id FROM GownPhoto WHERE gownId IN (${placeholders(gownIds.length)})
-       ORDER BY createdAt ASC
-     ) GROUP BY gownId`,
+    `SELECT gownId, id FROM (
+       SELECT gownId, id,
+              ROW_NUMBER() OVER (PARTITION BY gownId ORDER BY createdAt ASC, id ASC) AS rn
+       FROM GownPhoto
+       WHERE gownId IN (${placeholders(gownIds.length)})
+         AND filename NOT LIKE '${PLACEHOLDER_PREFIX}%'
+     ) WHERE rn = 1`,
     gownIds
   );
   return new Map(rows.map((row) => [row.gownId, row.id]));

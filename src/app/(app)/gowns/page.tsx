@@ -4,6 +4,7 @@ import { addDays, formatDayShort, today } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { getSettings, settingNumber } from "@/lib/settings";
 import { occupiedWindow } from "@/lib/rentals";
+import { GownSilhouette } from "@/components/gown-silhouette";
 
 export const metadata = { title: "Gowns" };
 export const dynamic = "force-dynamic";
@@ -96,7 +97,7 @@ export default async function GownsPage({
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={`/api/photos/${thumbnailId}`} alt={gown.description} />
                     ) : (
-                      <span className="placeholder">#{gown.number}</span>
+                      <GownSilhouette gown={gown} className="gown-sil" />
                     )}
                   </div>
                   <div className="gown-body">

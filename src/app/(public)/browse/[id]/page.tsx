@@ -3,7 +3,13 @@ import { notFound } from "next/navigation";
 import { addDays, formatDay, parseDay, toInputDay, today } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { getSettings, settingNumber } from "@/lib/settings";
-import { getPublicGown, listGownPhotos, pendingRequestCounts, takenGownIds } from "@/lib/queries";
+import {
+  getPublicGown,
+  isPlaceholderPhoto,
+  listGownPhotos,
+  pendingRequestCounts,
+  takenGownIds
+} from "@/lib/queries";
 import { JsonLd, breadcrumbSchema, gownSchema } from "@/lib/schema-org";
 import { RequestForm } from "../request-form";
 import { GownStage } from "@/components/showroom/gown-stage";
@@ -18,8 +24,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const details = [gown.color, gown.size ? `size ${gown.size}` : null].filter(Boolean).join(", ");
   const description = `${gown.description}${details ? ` — ${details}` : ""}. Available to rent from ${settings.brandName} at ${formatMoney(gown.priceCents, settings.currency)} for the evening.`;
 
-  const photos = await listGownPhotos(id);
-  const image = photos[0] ? `/api/public/photos/${photos[0].id}` : "/og.jpg";
+  const real = (await listGownPhotos(id)).filter((photo) => !isPlaceholderPhoto(photo));
+  const image = real[0] ? `/api/public/photos/${real[0].id}` : "/og.jpg";
 
   return {
     title: gown.description,
@@ -54,7 +60,12 @@ export default async function GownPage({
   const returnOffset = settingNumber(settings, "returnOffsetDays", 2);
   const partyDate = parseDay(query.date);
 
-  const [photos, pending] = await Promise.all([listGownPhotos(id), pendingRequestCounts()]);
+  const [allPhotos, pending] = await Promise.all([listGownPhotos(id), pendingRequestCounts()]);
+
+  // Generated stand-ins are not photographs of the gown, so the storefront does
+  // not show them; the turntable below is built from the gown's own description
+  // and is a truer picture. The admin still sees every row and can delete them.
+  const photos = allPhotos.filter((photo) => !isPlaceholderPhoto(photo));
 
   const taken = partyDate
     ? await takenGownIds(

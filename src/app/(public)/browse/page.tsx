@@ -6,6 +6,7 @@ import { firstPhotoIds, listPublicGowns, pendingRequestCounts, takenGownIds } fr
 import { JsonLd, breadcrumbSchema, collectionSchema } from "@/lib/schema-org";
 import { EnterAtelier } from "@/components/showroom/enter-atelier";
 import type { ShowroomGown } from "@/components/showroom/atelier";
+import { GownSilhouette } from "@/components/gown-silhouette";
 
 export const dynamic = "force-dynamic";
 
@@ -206,7 +207,7 @@ export default async function BrowsePage({
                         loading="lazy"
                       />
                     ) : (
-                      <span className="placeholder">{gown.number}</span>
+                      <GownSilhouette gown={gown} className="gown-sil" />
                     )}
                     {partyDate ? (
                       <span className={isTaken ? "lux-status busy" : "lux-status free"}>

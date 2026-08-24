@@ -50,60 +50,139 @@ function distance2(
   return dr * dr + dg * dg + db * db;
 }
 
-/**
- * Estimate the backdrop from the border of the frame.
- *
- * The median of the border rather than the mean: a mean is dragged around by
- * the gown wherever it touches an edge, and a shop will hang a hem out of
- * frame at the bottom more often than not.
- */
-function borderColour(
-  data: Uint8ClampedArray,
-  seen: Uint8Array,
-  width: number,
-  height: number
-) {
-  const reds: number[] = [];
-  const greens: number[] = [];
-  const blues: number[] = [];
+/** Hue in degrees, saturation and lightness, all 0..1 except hue. */
+function hsl(data: Uint8ClampedArray, index: number): [number, number, number] {
+  const r = data[index] / 255;
+  const g = data[index + 1] / 255;
+  const b = data[index + 2] / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const lightness = (max + min) / 2;
+  const chroma = max - min;
 
-  const sample = (x: number, y: number) => {
-    const pixel = y * width + x;
-    // Already keyed on an earlier pass — it is not what is left on the border.
-    if (seen[pixel]) return;
-    const index = pixel * 4;
-    reds.push(data[index]);
-    greens.push(data[index + 1]);
-    blues.push(data[index + 2]);
-  };
-
-  const step = Math.max(1, Math.floor(width / 64));
-  for (let x = 0; x < width; x += step) {
-    sample(x, 0);
-    sample(x, height - 1);
-  }
-  for (let y = 0; y < height; y += step) {
-    sample(0, y);
-    sample(width - 1, y);
+  let hue = 0;
+  if (chroma > 1e-6) {
+    if (max === r) hue = ((g - b) / chroma + 6) % 6;
+    else if (max === g) hue = (b - r) / chroma + 2;
+    else hue = (r - g) / chroma + 4;
+    hue *= 60;
   }
 
-  if (reds.length === 0) return null;
+  const saturation = chroma < 1e-6 ? 0 : chroma / (1 - Math.abs(2 * lightness - 1) + 1e-9);
+  return [hue, saturation, lightness];
+}
 
-  const median = (values: number[]) => {
-    values.sort((a, b) => a - b);
-    return values[Math.floor(values.length / 2)];
-  };
+/** Shortest angle between two hues. */
+function hueGap(a: number, b: number): number {
+  const raw = Math.abs(a - b) % 360;
+  return raw > 180 ? 360 - raw : raw;
+}
 
-  return { r: median(reds), g: median(greens), b: median(blues) };
+/** The largest connected run of true pixels, everything else discarded. */
+function largestRegion(mask: Uint8Array, width: number, height: number): Uint8Array {
+  const label = new Int32Array(width * height).fill(-1);
+  let best = -1;
+  let bestSize = 0;
+  let next = 0;
+
+  for (let start = 0; start < width * height; start += 1) {
+    if (!mask[start] || label[start] >= 0) continue;
+    const id = next;
+    next += 1;
+    const stack = [start];
+    label[start] = id;
+    let size = 0;
+
+    while (stack.length > 0) {
+      const pixel = stack.pop()!;
+      size += 1;
+      const x = pixel % width;
+      const y = (pixel - x) / width;
+      const visit = (nx: number, ny: number) => {
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) return;
+        const neighbour = ny * width + nx;
+        if (!mask[neighbour] || label[neighbour] >= 0) return;
+        label[neighbour] = id;
+        stack.push(neighbour);
+      };
+      visit(x + 1, y);
+      visit(x - 1, y);
+      visit(x, y + 1);
+      visit(x, y - 1);
+    }
+
+    if (size > bestSize) {
+      bestSize = size;
+      best = id;
+    }
+  }
+
+  const out = new Uint8Array(width * height);
+  for (let pixel = 0; pixel < width * height; pixel += 1) {
+    out[pixel] = label[pixel] === best ? 1 : 0;
+  }
+  return out;
 }
 
 /**
- * Cut the gown out of its backdrop.
+ * Read the gown's own colour, from the middle of the frame.
  *
- * Tolerance is generous because a plain wall is never one flat colour — it has
- * a gradient across it from whatever light is in the room — but the flood fill
- * keeps that generosity safe, since it can only ever eat backdrop that reaches
- * the edge of the frame.
+ * Hue is a circular quantity and averaging it as a number is meaningless — the
+ * mean of 350 degrees and 10 degrees is 180, which is the exact opposite of the
+ * right answer. So the samples are averaged as vectors on the colour wheel.
+ */
+function subjectColour(data: Uint8ClampedArray, width: number, height: number) {
+  let x = 0;
+  let y = 0;
+  let saturation = 0;
+  let lightness = 0;
+  let count = 0;
+
+  // Down the centre column, where a gown on a stand always is.
+  for (const at of [0.45, 0.58, 0.7, 0.82]) {
+    const cy = Math.round(height * at);
+    const cx = Math.round(width * 0.5);
+    for (let dy = -5; dy <= 5; dy += 1) {
+      for (let dx = -5; dx <= 5; dx += 1) {
+        const index = ((cy + dy) * width + (cx + dx)) * 4;
+        const [hue, s, l] = hsl(data, index);
+        if (s <= 0.08) continue;
+        const radians = (hue * Math.PI) / 180;
+        x += Math.cos(radians);
+        y += Math.sin(radians);
+        saturation += s;
+        lightness += l;
+        count += 1;
+      }
+    }
+  }
+
+  if (count === 0) return null;
+  return {
+    hue: ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360,
+    saturation: saturation / count,
+    lightness: lightness / count
+  };
+}
+
+
+/**
+ * Cut the gown out of its surroundings.
+ *
+ * Two strategies, chosen from the photograph itself, because the two situations
+ * are genuinely different problems:
+ *
+ *   - A gown with a clear colour is keyed by HUE. This is what makes a busy
+ *     background survivable: a pink gown standing on a wood floor is only about
+ *     47 apart in RGB, which no colour-distance test can separate, but they are
+ *     313 degrees apart in hue and trivially separable. The gown is grown from
+ *     its own colour rather than the room being eaten away.
+ *   - A gown with almost no colour — ivory, white, champagne — has no hue to
+ *     key on, and for those the backdrop is flood-filled inward from the edges
+ *     of the frame instead. That only works against a plain wall, which is
+ *     exactly the case those gowns have to be shot in anyway.
+ *
+ * Either way it refuses work it cannot do, and the caller keeps its fallback.
  */
 export async function loadCutout(
   three: typeof THREE,
@@ -122,9 +201,7 @@ export async function loadCutout(
     return null;
   }
 
-  // Working resolution. Big enough to stand two metres from, small enough that
-  // the flood fill is instant.
-  const scale = Math.min(1, 900 / Math.max(image.naturalWidth, image.naturalHeight));
+  const scale = Math.min(1, 1100 / Math.max(image.naturalWidth, image.naturalHeight));
   const width = Math.max(2, Math.round(image.naturalWidth * scale));
   const height = Math.max(2, Math.round(image.naturalHeight * scale));
 
@@ -138,62 +215,133 @@ export async function loadCutout(
   const frame = context.getImageData(0, 0, width, height);
   const data = frame.data;
 
-  // Key the backdrop in passes.
-  //
-  // One pass is not enough, because a photograph of a gown standing in a room
-  // has at least two backdrops: the wall behind it and the floor under it, and
-  // usually a skirting board between them. A single colour key takes the wall
-  // and leaves a band of floor hanging off the bottom of the cut-out.
-  //
-  // So the estimate is re-run against whatever is still attached to the edge of
-  // the frame after the previous pass, and keyed again — wall, then floor, then
-  // whatever else reaches a border. It stops when a pass stops finding
-  // anything, and it stays safe for the same reason a single pass was safe:
-  // only regions actually connected to the edge are ever taken.
-  const seen = new Uint8Array(width * height);
-  const limit = tolerance * tolerance;
+  const subject = subjectColour(data, width, height);
+  /** 1 where the gown is. */
+  let keep: Uint8Array;
 
-  for (let pass = 0; pass < 3; pass += 1) {
-    const backdrop = borderColour(data, seen, width, height);
-    if (!backdrop) break;
+  if (subject && subject.saturation > 0.16) {
+    /* ------------------------------------------------- keyed by hue ----- */
 
-    const queue: number[] = [];
-    const consider = (x: number, y: number) => {
-      if (x < 0 || y < 0 || x >= width || y >= height) return;
-      const pixel = y * width + x;
-      if (seen[pixel]) return;
-      if (distance2(data, pixel * 4, backdrop.r, backdrop.g, backdrop.b) > limit) return;
-      seen[pixel] = 1;
-      queue.push(pixel);
-    };
-
-    for (let x = 0; x < width; x += 1) {
-      consider(x, 0);
-      consider(x, height - 1);
-    }
-    for (let y = 0; y < height; y += 1) {
-      consider(0, y);
-      consider(width - 1, y);
+    const mask = new Uint8Array(width * height);
+    for (let pixel = 0; pixel < width * height; pixel += 1) {
+      const [hue, saturation, lightness] = hsl(data, pixel * 4);
+      // Same hue family, colourful enough to mean it, and not so much darker
+      // than the gown that it is obviously something in shadow behind it.
+      mask[pixel] =
+        saturation > 0.1 &&
+        hueGap(hue, subject.hue) < 46 &&
+        lightness > subject.lightness * 0.45
+          ? 1
+          : 0;
     }
 
-    let taken = 0;
-    while (queue.length > 0) {
-      const pixel = queue.pop()!;
-      taken += 1;
-      const x = pixel % width;
-      const y = (pixel - x) / width;
-      consider(x + 1, y);
-      consider(x - 1, y);
-      consider(x, y + 1);
-      consider(x, y - 1);
+    keep = largestRegion(mask, width, height);
+
+    // Recover the pale highlights on tulle and satin, which lose their hue
+    // where they blow out. Strictly bright AND desaturated: a wood floor is
+    // also bright, but it is not desaturated, and letting it in drags the
+    // whole room along with it.
+    for (let pass = 0; pass < 4; pass += 1) {
+      const add: number[] = [];
+      for (let pixel = 0; pixel < width * height; pixel += 1) {
+        if (keep[pixel]) continue;
+        const x = pixel % width;
+        const y = (pixel - x) / width;
+        const touching =
+          (x > 0 && keep[pixel - 1]) ||
+          (x < width - 1 && keep[pixel + 1]) ||
+          (y > 0 && keep[pixel - width]) ||
+          (y < height - 1 && keep[pixel + width]);
+        if (!touching) continue;
+
+        const [hue, saturation, lightness] = hsl(data, pixel * 4);
+        if (lightness > 0.72 && (saturation < 0.18 || hueGap(hue, subject.hue) < 26)) {
+          add.push(pixel);
+        }
+      }
+      for (const pixel of add) keep[pixel] = 1;
     }
 
-    // Nothing left attached to the border worth taking.
-    if (taken < width * height * 0.004) break;
+    keep = largestRegion(keep, width, height);
+  } else {
+    /* ------------------------------------ keyed by flooding the backdrop */
+
+    const background = new Uint8Array(width * height);
+    const limit = tolerance * tolerance;
+
+    // In passes, because a gown photographed in a room has at least two
+    // backdrops — the wall behind it and the floor under it.
+    for (let pass = 0; pass < 4; pass += 1) {
+      const reds: number[] = [];
+      const greens: number[] = [];
+      const blues: number[] = [];
+      const step = Math.max(1, Math.floor(width / 64));
+
+      const sample = (x: number, y: number) => {
+        const pixel = y * width + x;
+        if (background[pixel]) return;
+        const index = pixel * 4;
+        reds.push(data[index]);
+        greens.push(data[index + 1]);
+        blues.push(data[index + 2]);
+      };
+      for (let x = 0; x < width; x += step) {
+        sample(x, 0);
+        sample(x, height - 1);
+      }
+      for (let y = 0; y < height; y += step) {
+        sample(0, y);
+        sample(width - 1, y);
+      }
+      if (reds.length === 0) break;
+
+      const median = (values: number[]) => {
+        values.sort((a, b) => a - b);
+        return values[Math.floor(values.length / 2)];
+      };
+      const backdrop = { r: median(reds), g: median(greens), b: median(blues) };
+
+      const queue: number[] = [];
+      const consider = (x: number, y: number) => {
+        if (x < 0 || y < 0 || x >= width || y >= height) return;
+        const pixel = y * width + x;
+        if (background[pixel]) return;
+        if (distance2(data, pixel * 4, backdrop.r, backdrop.g, backdrop.b) > limit) return;
+        background[pixel] = 1;
+        queue.push(pixel);
+      };
+      for (let x = 0; x < width; x += 1) {
+        consider(x, 0);
+        consider(x, height - 1);
+      }
+      for (let y = 0; y < height; y += 1) {
+        consider(0, y);
+        consider(width - 1, y);
+      }
+
+      let taken = 0;
+      while (queue.length > 0) {
+        const pixel = queue.pop()!;
+        taken += 1;
+        const x = pixel % width;
+        const y = (pixel - x) / width;
+        consider(x + 1, y);
+        consider(x - 1, y);
+        consider(x, y + 1);
+        consider(x, y - 1);
+      }
+      if (taken < width * height * 0.004) break;
+    }
+
+    const foreground = new Uint8Array(width * height);
+    for (let pixel = 0; pixel < width * height; pixel += 1) {
+      foreground[pixel] = background[pixel] ? 0 : 1;
+    }
+    keep = largestRegion(foreground, width, height);
   }
 
-  // Feather: a pixel keeps partial alpha if it borders kept pixels, so the
-  // silhouette does not read as a sticker cut with scissors.
+  /* ------------------------------------------------- alpha, edge, crop */
+
   let kept = 0;
   let minX = width;
   let minY = height;
@@ -203,7 +351,7 @@ export async function loadCutout(
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const pixel = y * width + x;
-      if (!seen[pixel]) {
+      if (keep[pixel]) {
         kept += 1;
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
@@ -212,13 +360,14 @@ export async function loadCutout(
         continue;
       }
 
-      let neighbours = 0;
-      if (x > 0 && !seen[pixel - 1]) neighbours += 1;
-      if (x < width - 1 && !seen[pixel + 1]) neighbours += 1;
-      if (y > 0 && !seen[pixel - width]) neighbours += 1;
-      if (y < height - 1 && !seen[pixel + width]) neighbours += 1;
-
-      data[pixel * 4 + 3] = neighbours > 0 ? 110 : 0;
+      // Feather: a discarded pixel touching a kept one holds partial alpha, so
+      // the silhouette does not read as cut with scissors.
+      const touching =
+        (x > 0 && keep[pixel - 1]) ||
+        (x < width - 1 && keep[pixel + 1]) ||
+        (y > 0 && keep[pixel - width]) ||
+        (y < height - 1 && keep[pixel + width]);
+      data[pixel * 4 + 3] = touching ? 110 : 0;
     }
   }
 
@@ -226,16 +375,11 @@ export async function loadCutout(
 
   context.putImageData(frame, 0, 0);
 
-  // Crop to what survived.
-  //
-  // The panel that goes on the plinth is sized from this, so it has to be the
-  // bounding box of the GOWN and not of the photograph. Otherwise the framing
-  // sets the scale: a gown shot with a metre of wall above it stands a metre
-  // shorter than one shot tight, and the room's gowns end up at unrelated
-  // sizes for reasons that have nothing to do with the dresses.
+  // Crop to the gown, not to the photograph. Otherwise framing sets scale, and
+  // a gown shot with a metre of wall above it stands a metre shorter than one
+  // shot tight.
   const cropWidth = maxX - minX + 1;
   const cropHeight = maxY - minY + 1;
-
   const cropped = document.createElement("canvas");
   cropped.width = cropWidth;
   cropped.height = cropHeight;

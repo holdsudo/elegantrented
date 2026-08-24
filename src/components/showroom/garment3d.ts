@@ -35,13 +35,16 @@ const GOWN_RADIUS = 0.54;
  */
 const HEM_LIFT = 0.02;
 /**
- * The form is cut slightly narrower than the gown's bodice.
+ * The form is cut well inside the gown's own silhouette.
  *
- * If the two are the same width the linen punches through the cloth at the
- * waist as a bright ring. The form only needs to be visible above the neckline,
- * so everywhere else it gives way to the garment.
+ * Wherever the linen is wider than the cloth it punches through as a bright
+ * ring around the hip — and the margin needed is not constant, because a
+ * mermaid draws in to a third of its hem through the thigh while a ballgown
+ * never comes near the form at all. Rather than fit each silhouette, the form
+ * is simply cut narrow enough to clear the tightest of them. It is only ever
+ * meant to be seen above the neckline, where it is slender anyway.
  */
-const FORM_SCALE = 0.84;
+const FORM_SCALE = 0.7;
 
 /**
  * Resample the six or seven landmark points into a smooth outline.
@@ -121,8 +124,15 @@ function foldGeometry(geometry: THREE.BufferGeometry, spec: GarmentSpec) {
   geometry.computeVertexNormals();
 }
 
+/** Fine weave for satins and silks, open weave for tulle and lace. */
+export type Weave = { fine: THREE.Texture; open: THREE.Texture };
+
 /** The cloth itself. Sheen is what separates velvet from satin at a glance. */
-function clothMaterial(three: typeof THREE, spec: GarmentSpec): THREE.MeshPhysicalMaterial {
+function clothMaterial(
+  three: typeof THREE,
+  spec: GarmentSpec,
+  weave?: Weave | null
+): THREE.MeshPhysicalMaterial {
   const material = new three.MeshPhysicalMaterial({
     color: new three.Color(spec.palette.base),
     roughness: spec.roughness,
@@ -134,6 +144,22 @@ function clothMaterial(three: typeof THREE, spec: GarmentSpec): THREE.MeshPhysic
     sheenRoughness: Math.min(spec.roughness + 0.2, 1),
     sheenColor: new three.Color(spec.palette.highlight)
   });
+
+  // The weave.
+  //
+  // This is what stops satin reading as painted plastic. Cloth is threads
+  // crossing threads, and at the distance a visitor stops from a plinth that
+  // structure is just at the edge of visible — so the travelling highlight
+  // breaks into thousands of tiny facets instead of sliding across the surface
+  // as one continuous sheet. Nothing else in the material does that job.
+  if (weave) {
+    const open = spec.fabric === "tulle" || spec.fabric === "lace" || spec.fabric === "chiffon";
+    material.normalMap = open ? weave.open : weave.fine;
+    // Deeper relief on a matte, chunky cloth; barely there on a fluid one that
+    // is meant to look poured rather than woven.
+    const depth = spec.fabric === "velvet" ? 0.5 : open ? 0.42 : 0.24;
+    material.normalScale = new three.Vector2(depth, depth);
+  }
 
   // Satin and beading get a lacquer coat, which is what produces the hard
   // highlight that slides across the fabric as you walk past it.
@@ -233,7 +259,11 @@ export type BuiltGarment = {
  * The returned group is roughly 2.2 m tall and 1.1 m across at the widest, which
  * is what the plinth spacing in `atelier.ts` is set from.
  */
-export function buildGarment(three: typeof THREE, spec: GarmentSpec): BuiltGarment {
+export function buildGarment(
+  three: typeof THREE,
+  spec: GarmentSpec,
+  weave?: Weave | null
+): BuiltGarment {
   const group = new three.Group();
   const disposables: Disposables = { geometries: [], materials: [] };
 
@@ -247,7 +277,7 @@ export function buildGarment(three: typeof THREE, spec: GarmentSpec): BuiltGarme
   foldGeometry(cloth, spec);
   disposables.geometries.push(cloth);
 
-  const material = clothMaterial(three, spec);
+  const material = clothMaterial(three, spec, weave);
   disposables.materials.push(material);
 
   const gown = new three.Mesh(cloth, material);

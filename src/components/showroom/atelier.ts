@@ -18,6 +18,13 @@
 import type * as THREE from "three";
 import { garmentLabel, garmentSpec, type GarmentSpec } from "@/lib/garment";
 import { buildGarment, disposeGarment, type BuiltGarment } from "./garment3d";
+import {
+  brassSurface,
+  marbleSurface,
+  plasterSurface,
+  weaveSurface,
+  type Surface
+} from "./textures";
 
 export type ShowroomGown = {
   id: string;
@@ -207,7 +214,14 @@ type Tracked = {
   textures: THREE.Texture[];
 };
 
-function buildRoom(three: typeof THREE, scene: THREE.Scene, halfLength: number, track: Tracked) {
+function buildRoom(
+  three: typeof THREE,
+  scene: THREE.Scene,
+  halfLength: number,
+  track: Tracked,
+  surfaces: { marble: Surface; plaster: Surface; brass: Surface },
+  quality: "high" | "low"
+) {
   // The room is deliberately held down.
   //
   // The environment map lights every surface that samples it, and at full
@@ -216,23 +230,36 @@ function buildRoom(three: typeof THREE, scene: THREE.Scene, halfLength: number, 
   // fraction of the environment; the cloth takes all of it. That difference is
   // what makes the gowns read as the lit objects and everything else as the room
   // they are standing in.
+  // Marble, not a colour. The roughness map is doing more work here than the
+  // colour map: it is the uneven polish that makes a reflection break up as you
+  // move, which a uniform roughness value can never do.
   const stone = new three.MeshStandardMaterial({
-    color: new three.Color("#211D1A"),
-    roughness: 0.22,
-    metalness: 0.1,
-    envMapIntensity: 0.3
+    map: surfaces.marble.map,
+    roughnessMap: surfaces.marble.roughnessMap,
+    normalMap: surfaces.marble.normalMap,
+    color: new three.Color("#7A736C"),
+    roughness: 1,
+    metalness: 0.08,
+    envMapIntensity: 0.55,
+    // Semi-transparent so the mirrored gowns below read through the polish.
+    transparent: quality === "high",
+    opacity: quality === "high" ? 0.9 : 1
   });
   const wall = new three.MeshStandardMaterial({
     color: new three.Color("#E4DACA"),
-    roughness: 0.92,
+    roughnessMap: surfaces.plaster.roughnessMap,
+    normalMap: surfaces.plaster.normalMap,
+    roughness: 1,
     metalness: 0,
     envMapIntensity: 0.45
   });
   const trim = new three.MeshStandardMaterial({
     color: new three.Color("#B08D57"),
-    roughness: 0.34,
-    metalness: 0.85,
-    envMapIntensity: 1.2
+    roughnessMap: surfaces.brass.roughnessMap,
+    normalMap: surfaces.brass.normalMap,
+    roughness: 1,
+    metalness: 0.92,
+    envMapIntensity: 1.3
   });
   // A ceiling faces down, so it catches no key light and samples the dark half
   // of the environment — left alone it renders as a muddy brown lid over the
@@ -242,35 +269,48 @@ function buildRoom(three: typeof THREE, scene: THREE.Scene, halfLength: number, 
     color: new three.Color("#F6F0E6"),
     roughness: 0.95,
     emissive: new three.Color("#EFE2CE"),
-    emissiveIntensity: 0.42
+    emissiveIntensity: 0.2
   });
   const cove = new three.MeshBasicMaterial({ color: new three.Color("#FFF2DC") });
   track.materials.push(stone, wall, trim, ceilingMaterial, cove);
 
-  // Floor.
+  // Tiling. A marble slab is about two metres; stretching one across a
+  // twenty-three metre hall would smear the veins into streaks.
+  for (const texture of [surfaces.marble.map, surfaces.marble.roughnessMap, surfaces.marble.normalMap]) {
+    if (!texture) continue;
+    texture.repeat.set(HALL_HALF_WIDTH, halfLength);
+    texture.needsUpdate = true;
+  }
+  for (const texture of [surfaces.plaster.roughnessMap, surfaces.plaster.normalMap]) {
+    if (!texture) continue;
+    texture.repeat.set(halfLength * 0.5, CEILING * 0.4);
+    texture.needsUpdate = true;
+  }
+
   const floorGeometry = new three.PlaneGeometry(HALL_HALF_WIDTH * 2, halfLength * 2);
   track.geometries.push(floorGeometry);
+
   const floor = new three.Mesh(floorGeometry, stone);
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   scene.add(floor);
 
-  // A runner of pale stone down the middle of the aisle, which gives the eye a
-  // line to walk along and stops the floor reading as one black slab.
-  const runnerMaterial = new three.MeshStandardMaterial({
-    color: new three.Color("#4A4038"),
-    roughness: 0.45,
-    metalness: 0.05,
-    envMapIntensity: 0.35
-  });
-  track.materials.push(runnerMaterial);
-  const runnerGeometry = new three.PlaneGeometry(2.6, halfLength * 2 - 0.4);
-  track.geometries.push(runnerGeometry);
-  const runner = new three.Mesh(runnerGeometry, runnerMaterial);
-  runner.rotation.x = -Math.PI / 2;
-  runner.position.y = 0.004;
-  runner.receiveShadow = true;
-  scene.add(runner);
+  // Two brass inlay lines down the aisle, in place of a runner.
+  //
+  // There used to be a broad dark strip here, from when the floor was a flat
+  // near-black fill and the aisle needed something to separate it. Against real
+  // marble it reads as a shadow lying across the room rather than as a path —
+  // a large matte rectangle competing with the one surface in the scene worth
+  // looking at. Inlay does the same job the right way round: it draws the length
+  // of the hall as two catching lines, and it is what an actual gallery floor
+  // would have.
+  const inlayGeometry = new three.BoxGeometry(0.035, 0.006, halfLength * 2 - 0.6);
+  track.geometries.push(inlayGeometry);
+  for (const side of [-1, 1]) {
+    const inlay = new three.Mesh(inlayGeometry, trim);
+    inlay.position.set(side * 1.42, 0.003, 0);
+    scene.add(inlay);
+  }
 
   // Ceiling.
   const ceilingGeometry = new three.PlaneGeometry(HALL_HALF_WIDTH * 2, halfLength * 2);
@@ -335,18 +375,70 @@ function buildRoom(three: typeof THREE, scene: THREE.Scene, halfLength: number, 
     for (const side of [-1, 1]) {
       const pilaster = new three.Mesh(pilasterGeometry, wall);
       pilaster.position.set(side * (HALL_HALF_WIDTH - 0.13), CEILING / 2, z);
-      pilaster.castShadow = true;
+      pilaster.receiveShadow = true;
       scene.add(pilaster);
 
       // One panel per bay, so the last pilaster gets none after it.
       if (index < pilasterCount) {
         const panel = new three.Mesh(panelGeometry, panelMaterial);
         panel.position.set(side * (HALL_HALF_WIDTH - 0.04), 1.55, z + bay / 2);
-        panel.castShadow = true;
         panel.receiveShadow = true;
         scene.add(panel);
       }
     }
+  }
+
+  // A note on what casts.
+  //
+  // Only the gowns and their plinths cast shadows. The architecture — cornice,
+  // skirting, pilasters, wall panels — receives them and casts nothing. That is
+  // not laziness: a single directional key placed above a closed room throws one
+  // enormous hard-edged wedge off every long horizontal it meets, and the floor
+  // ends up cut in half by a diagonal that reads as a rendering fault rather
+  // than as architecture. Real galleries are lit by many soft sources from
+  // inside the room, which this scene cannot afford; letting only the subjects
+  // cast is the honest approximation, and it is the one that looks right.
+
+  // Skirting and cornice.
+  //
+  // Every real room has them, no rendered room remembers them, and their
+  // absence is felt long before it is noticed: a wall meeting a floor at a
+  // perfect right angle with no moulding is the silhouette of a cardboard box.
+  // They also give the grazing cove light a horizontal edge to catch, which
+  // draws the length of the hall.
+  const skirtingGeometry = new three.BoxGeometry(0.09, 0.16, halfLength * 2);
+  const corniceGeometry = new three.BoxGeometry(0.13, 0.2, halfLength * 2);
+  track.geometries.push(skirtingGeometry, corniceGeometry);
+
+  for (const side of [-1, 1]) {
+    const skirting = new three.Mesh(skirtingGeometry, wall);
+    skirting.position.set(side * (HALL_HALF_WIDTH - 0.045), 0.08, 0);
+    skirting.receiveShadow = true;
+    scene.add(skirting);
+
+    const cornice = new three.Mesh(corniceGeometry, wall);
+    cornice.position.set(side * (HALL_HALF_WIDTH - 0.065), CEILING - 0.1, 0);
+    scene.add(cornice);
+  }
+
+  // A coffered ceiling.
+  //
+  // A flat ceiling is a large, evenly-lit, featureless plane — the surface most
+  // likely to give the render away. Beams break it into bays and give the light
+  // somewhere to fall off, which is most of why a real ceiling reads as being
+  // above you rather than as a lid.
+  const beamGeometry = new three.BoxGeometry(HALL_HALF_WIDTH * 2, 0.13, 0.26);
+  track.geometries.push(beamGeometry);
+  const beams = Math.max(2, Math.round((halfLength * 2) / 2.4));
+  for (let index = 0; index <= beams; index += 1) {
+    const beam = new three.Mesh(beamGeometry, wall);
+    beam.position.set(0, CEILING - 0.065, -halfLength + (index / beams) * halfLength * 2);
+    // Beams do not cast. A hard directional key striking a row of ceiling
+    // beams throws diagonal bars down the walls, which reads as a fault rather
+    // than as architecture — real coves light the ceiling from below and the
+    // beams are the thing lit, not the thing shadowing.
+    beam.castShadow = false;
+    scene.add(beam);
   }
 
   // End walls, so the room is closed and the visitor cannot see the void.
@@ -415,7 +507,26 @@ export function buildAtelier(
   const environment = buildEnvironment(three, renderer);
   scene.environment = environment;
 
-  buildRoom(three, scene, halfLength, track);
+  // Surfaces are generated once and shared. On a low-tier device the marble
+  // colour map is the only one worth its cost — the normal and roughness detail
+  // is invisible at the resolution and framerate a phone is running at, and the
+  // generation itself is a noticeable pause on a slow CPU.
+  const surfaces = {
+    marble: marbleSurface(three, quality === "high" ? 1024 : 512),
+    plaster: plasterSurface(three, quality === "high" ? 512 : 256),
+    brass: brassSurface(three, 256)
+  };
+
+  // One weave, shared by every gown in the room. The lathe's UVs run 0..1 both
+  // ways, so the repeat is what sets the actual thread count on the cloth.
+  const fineWeave = weaveSurface(three, true, quality === "high" ? 512 : 256);
+  const openWeave = weaveSurface(three, false, quality === "high" ? 512 : 256);
+  for (const surface of [fineWeave, openWeave]) {
+    surface.normalMap?.repeat.set(6, 9);
+  }
+  const weave = { fine: fineWeave.normalMap!, open: openWeave.normalMap! };
+
+  buildRoom(three, scene, halfLength, track, surfaces, quality);
 
   // The two real lights. The key casts the shadows that ground the gowns on
   // their plinths; the hemisphere keeps the shadow side from going black.
@@ -459,12 +570,22 @@ export function buildAtelier(
   track.geometries.push(poolGeometry);
 
   // Shared plinth parts — one geometry, one material, however many gowns.
-  const plinthGeometry = new three.CylinderGeometry(
-    PLINTH_RADIUS,
-    PLINTH_RADIUS * 1.06,
-    PLINTH_HEIGHT,
-    40
-  );
+  // A chamfered plinth, swept rather than a plain cylinder.
+  //
+  // Nothing manufactured has a perfectly sharp arris — it would chip, and it
+  // would be unpleasant to touch, so everything real is eased. That eased edge
+  // catches a thin line of light, and it is one of the most reliable cues that
+  // an object was made rather than computed. A cylinder has none.
+  const plinthProfile = [
+    [0, 0],
+    [PLINTH_RADIUS * 1.06 - 0.02, 0],
+    [PLINTH_RADIUS * 1.06, 0.022],
+    [PLINTH_RADIUS * 1.008, PLINTH_HEIGHT - 0.03],
+    [PLINTH_RADIUS - 0.012, PLINTH_HEIGHT - 0.008],
+    [PLINTH_RADIUS - 0.034, PLINTH_HEIGHT],
+    [0, PLINTH_HEIGHT]
+  ].map(([radius, height]) => new three.Vector2(radius, height));
+  const plinthGeometry = new three.LatheGeometry(plinthProfile, 56);
   const plinthMaterial = new three.MeshStandardMaterial({
     color: new three.Color("#EAE1D2"),
     roughness: 0.55,
@@ -493,7 +614,8 @@ export function buildAtelier(
     group.rotation.y = side > 0 ? -Math.PI / 5 : Math.PI / 5;
 
     const plinth = new three.Mesh(plinthGeometry, plinthMaterial);
-    plinth.position.y = PLINTH_HEIGHT / 2;
+    // The lathe is built from the floor up, unlike a cylinder which is centred.
+    plinth.position.y = 0;
     plinth.castShadow = true;
     plinth.receiveShadow = true;
     group.add(plinth);
@@ -504,7 +626,7 @@ export function buildAtelier(
     group.add(pool);
 
     // The gown itself, standing on the plinth.
-    const built = buildGarment(three, spec);
+    const built = buildGarment(three, spec, weave);
     built.group.position.y = PLINTH_HEIGHT;
     group.add(built.group);
 
@@ -523,6 +645,47 @@ export function buildAtelier(
     group.add(plaque);
 
     scene.add(group);
+
+    // The reflection, as a mirrored twin rather than a mirror.
+    //
+    // A boutique floor that does not carry the dresses standing on it is one of
+    // the clearest signs a room is not real. The obvious implementation is a
+    // Reflector — re-render the scene from the mirrored camera — but that plane
+    // is necessarily coplanar with the floor it replaces, and the two z-fight
+    // into hard-edged wedges across the stone.
+    //
+    // Flipping a copy of the stand through the floor plane is exact, costs one
+    // extra draw instead of an extra scene render, and cannot fight with
+    // anything because it is nowhere near the surface. It is also what the
+    // reflection physically *is* for a flat mirror.
+    if (quality === "high") {
+      const reflection = group.clone(true);
+      reflection.scale.y = -1;
+
+      reflection.traverse((node) => {
+        const mesh = node as THREE.Mesh;
+        if (!mesh.isMesh) return;
+
+        const source = mesh.material as THREE.Material;
+        const faded = source.clone();
+        faded.transparent = true;
+        faded.opacity = 0.26;
+        // Never occlude: this is an image lying under a polished surface, not
+        // an object, so it must not write depth or take part in sorting fights.
+        faded.depthWrite = false;
+        // Mirroring inverts the winding, so back faces become front ones.
+        faded.side = three.DoubleSide;
+        mesh.material = faded;
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+        track.materials.push(faded);
+      });
+
+      // Drawn before the floor, which then blends over it as polish.
+      reflection.renderOrder = -1;
+      scene.add(reflection);
+    }
+
     stands.push({ gown, spec, position: new three.Vector3(x, 0, z), group, built });
   });
 
@@ -538,6 +701,11 @@ export function buildAtelier(
       for (const geometry of track.geometries) geometry.dispose();
       for (const material of track.materials) material.dispose();
       for (const texture of track.textures) texture.dispose();
+      surfaces.marble.dispose();
+      surfaces.plaster.dispose();
+      surfaces.brass.dispose();
+      fineWeave.dispose();
+      openWeave.dispose();
       environment.dispose();
       scene.clear();
     }

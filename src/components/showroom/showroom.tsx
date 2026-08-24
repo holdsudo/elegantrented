@@ -26,6 +26,7 @@ import type * as THREE from "three";
 import { garmentLabel } from "@/lib/garment";
 import { buildAtelier, type Atelier, type ShowroomGown } from "./atelier";
 import { createTour, type Station, type Tour } from "./tour";
+import { createPost, type Post } from "./post";
 
 type Props = {
   gowns: ShowroomGown[];
@@ -72,6 +73,7 @@ export default function Showroom({ gowns, dateQuery, onExit, onUnsupported }: Pr
     let renderer: THREE.WebGLRenderer | null = null;
     let atelier: Atelier | null = null;
     let tour: Tour | null = null;
+    let post: Post | null = null;
     let onResize: (() => void) | null = null;
     let detachClick: (() => void) | null = null;
 
@@ -106,14 +108,22 @@ export default function Showroom({ gowns, dateQuery, onExit, onUnsupported }: Pr
       renderer.shadowMap.enabled = quality === "high";
       renderer.shadowMap.type = three.PCFSoftShadowMap;
       renderer.toneMapping = three.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.06;
+      // Pulled down deliberately. Bloom and ambient occlusion both add energy to
+      // the image, and the ivory palette has very little headroom before the
+      // walls clip to pure white and take the shadow detail with them.
+      renderer.toneMappingExposure = 0.86;
       renderer.outputColorSpace = three.SRGBColorSpace;
       mount.appendChild(renderer.domElement);
       renderer.domElement.style.display = "block";
       renderer.domElement.style.touchAction = "none";
 
+      // About a 45mm lens. Games run wide — 70 to 90 degrees — because
+      // peripheral vision matters when something might be behind you. Nothing
+      // is behind you here, and wide angles bend verticals and stretch whatever
+      // is near the edge of frame, which is exactly the look being avoided.
+      // Interiors and fashion are both shot long.
       const camera = new three.PerspectiveCamera(
-        56,
+        44,
         window.innerWidth / window.innerHeight,
         0.1,
         140
@@ -140,6 +150,8 @@ export default function Showroom({ gowns, dateQuery, onExit, onUnsupported }: Pr
         reducedMotion
       });
       tourRef.current = tour;
+
+      post = createPost(three, renderer, atelier.scene, camera, quality);
 
       /* ------------------------------------------------- click to walk */
 
@@ -198,6 +210,7 @@ export default function Showroom({ gowns, dateQuery, onExit, onUnsupported }: Pr
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
+        post?.setSize(window.innerWidth, window.innerHeight);
       };
       window.addEventListener("resize", onResize);
 
@@ -214,6 +227,12 @@ export default function Showroom({ gowns, dateQuery, onExit, onUnsupported }: Pr
       let poll = 0;
       let lastIndex: number | null = null;
       let lastMoved = false;
+
+      // Focus is pulled, never cut. A camera operator racks focus over about a
+      // third of a second as the subject changes; snapping it between gowns
+      // reads as a glitch rather than as a lens.
+      const subject = new three.Vector3();
+      let focusDistance = 3;
 
       const tick = () => {
         if (disposed || !renderer || !atelier || !tour) return;
@@ -254,7 +273,18 @@ export default function Showroom({ gowns, dateQuery, onExit, onUnsupported }: Pr
           }
         }
 
-        renderer.render(atelier.scene, camera);
+        // Whatever the visitor is regarding is what the lens is focused on; if
+        // they are between gowns, focus rests down the aisle.
+        const regarded = tour.focusIndex();
+        const wanted =
+          regarded === null
+            ? 6.5
+            : camera.position.distanceTo(subject.copy(stations[regarded].regard));
+        focusDistance += (wanted - focusDistance) * Math.min(1, delta * 3.2);
+        post?.setFocus(focusDistance);
+
+        if (post) post.render();
+        else renderer.render(atelier.scene, camera);
 
         sampleFrames += 1;
         const elapsed = performance.now() - sampleStart;
@@ -287,6 +317,7 @@ export default function Showroom({ gowns, dateQuery, onExit, onUnsupported }: Pr
       detachClick?.();
       tour?.dispose();
       tourRef.current = null;
+      post?.dispose();
       atelier?.dispose();
       if (renderer) {
         renderer.domElement.remove();

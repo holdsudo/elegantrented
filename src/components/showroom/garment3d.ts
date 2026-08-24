@@ -2,127 +2,38 @@
  * Building a gown out of geometry.
  *
  * The shop has no photography yet, and a showroom full of grey rectangles would
- * be worse than no showroom. So each gown is *made* — swept from the silhouette
- * its own description describes, in its own colourway, hung on a tailor's form.
+ * be worse than no showroom. So each gown is *made* — from the silhouette its
+ * own description describes, in its own colourway, hung on a tailor's form.
  *
- * When a real photograph does exist for a gown, the plinth shows that instead
- * (see `atelier.ts`). Nothing here has to change for that to happen; this is the
- * floor, not the ceiling.
+ * The geometry itself lives in `cloth.ts`, and the reason it earns its own
+ * module is exactly what was wrong with the first version: these were lathes,
+ * and a lathe is a vase. Circular in section, mirror-symmetric, folded by a sine
+ * wave. Everything here now works from an elliptical grid with an irregular
+ * fold field, which separates "dress" from "turned object" far more than any
+ * amount of lighting ever could.
  *
- * Everything is built from primitives and disposed explicitly — a walkable room
- * holds every gown in memory at once, so leaking a geometry per gown per visit
- * would be felt.
+ * When a real photograph does exist for a gown, the plinth shows that instead.
+ * Nothing here has to change for that to happen; this is the floor, not the
+ * ceiling.
  */
 
 import type * as THREE from "three";
-import {
-  bodiceTop,
-  silhouetteProfile,
-  type GarmentSpec,
-  type ProfilePoint
-} from "@/lib/garment";
+import { bodiceTop, type GarmentSpec } from "@/lib/garment";
+import { buildClothGeometry, buildFormGeometry, DEPTH_RATIO } from "./cloth";
 
 /** Physical size of a gown on its form, in metres. */
 const GOWN_HEIGHT = 1.42;
 /** What profile radius 1.0 means in metres — a full ballgown hem. */
 const GOWN_RADIUS = 0.54;
 /**
- * How far the hem sits off the plinth.
- *
- * Almost nothing: a gown on a display form breaks at the floor, and lifting it
- * even a few centimetres exposes the stand's stem and foot underneath, which
- * instantly reads as a short dress on a pole rather than as a gown.
- */
-const HEM_LIFT = 0.02;
-/**
- * The form is cut well inside the gown's own silhouette.
+ * The form is cut inside the gown's own silhouette.
  *
  * Wherever the linen is wider than the cloth it punches through as a bright
- * ring around the hip — and the margin needed is not constant, because a
- * mermaid draws in to a third of its hem through the thigh while a ballgown
- * never comes near the form at all. Rather than fit each silhouette, the form
- * is simply cut narrow enough to clear the tightest of them. It is only ever
- * meant to be seen above the neckline, where it is slender anyway.
+ * ring at the hip. The margin needed is not constant — a mermaid draws in to a
+ * third of its hem through the thigh while a ballgown never comes near — so the
+ * form is simply cut narrow enough to clear the tightest of them.
  */
 const FORM_SCALE = 0.7;
-
-/**
- * Resample the six or seven landmark points into a smooth outline.
- *
- * A lathe swept through the raw landmarks reads as a stack of cones. Cloth does
- * not have corners, so the profile is run through a Catmull-Rom spline first and
- * the sweep follows the curve instead of the control points.
- */
-function smoothProfile(
-  three: typeof THREE,
-  points: ProfilePoint[],
-  steps: number
-): THREE.Vector2[] {
-  const curve = new three.CatmullRomCurve3(
-    points.map((point) => new three.Vector3(point.radius, point.height, 0)),
-    false,
-    "catmullrom",
-    0.5
-  );
-
-  return curve.getPoints(steps).map((point) => {
-    // A radius that dips below zero on an overshooting spline turns the mesh
-    // inside out, so the curve is clamped rather than trusted.
-    return new three.Vector2(Math.max(point.x, 0.02) * GOWN_RADIUS, point.y * GOWN_HEIGHT);
-  });
-}
-
-/**
- * Push the folds into the sweep.
- *
- * A lathe is perfectly round; cloth is not. Each vertex is nudged in and out
- * along its own radius by a sine wave running around the body, with a second,
- * finer wave beating against it so the folds do not repeat mechanically. The
- * amplitude grows toward the hem, because that is where fabric has slack to
- * gather — a bodice is fitted and stays smooth.
- */
-function foldGeometry(geometry: THREE.BufferGeometry, spec: GarmentSpec) {
-  const position = geometry.attributes.position;
-  const phase = spec.seed * Math.PI * 2;
-
-  // Tulle gathers in many shallow folds; satin falls in a few deep ones.
-  const depth = spec.fabric === "tulle" ? 0.018 : spec.fabric === "satin" ? 0.032 : 0.024;
-
-  for (let index = 0; index < position.count; index += 1) {
-    const x = position.getX(index);
-    const y = position.getY(index);
-    const z = position.getZ(index);
-
-    const radius = Math.hypot(x, z);
-    if (radius < 0.001) continue;
-
-    const theta = Math.atan2(z, x);
-    const heightFraction = Math.min(Math.max(y / (GOWN_HEIGHT * bodiceTop(spec)), 0), 1);
-
-    // Slack accumulates downward: none at the shoulder, all of it at the hem.
-    const slack = (1 - heightFraction) ** 1.6;
-
-    const primary = Math.sin(theta * spec.folds + phase);
-    const secondary = Math.sin(theta * (spec.folds * 1.7) + phase * 2.3) * 0.4;
-
-    // Folds gather OUTWARD only.
-    //
-    // A centred wave pushes half its vertices inward, and inward is where the
-    // dress form is — the linen then punches through the cloth as a ring of
-    // white teeth around the hip. It is also simply wrong: fabric drapes away
-    // from the body it hangs on, it does not pass through it. So the wave is
-    // remapped from [-1,1] to [0,1] and only ever adds.
-    const wave = (primary + secondary) / 1.4;
-    const offset = (wave * 0.5 + 0.5) * depth * slack;
-
-    const scaled = (radius + offset) / radius;
-    position.setX(index, x * scaled);
-    position.setZ(index, z * scaled);
-  }
-
-  position.needsUpdate = true;
-  geometry.computeVertexNormals();
-}
 
 /** Fine weave for satins and silks, open weave for tulle and lace. */
 export type Weave = { fine: THREE.Texture; open: THREE.Texture };
@@ -145,40 +56,27 @@ function clothMaterial(
     sheenColor: new three.Color(spec.palette.highlight)
   });
 
-  // The weave.
-  //
-  // This is what stops satin reading as painted plastic. Cloth is threads
-  // crossing threads, and at the distance a visitor stops from a plinth that
-  // structure is just at the edge of visible — so the travelling highlight
-  // breaks into thousands of tiny facets instead of sliding across the surface
-  // as one continuous sheet. Nothing else in the material does that job.
+  // The weave. This is what stops satin reading as painted plastic: cloth is
+  // threads crossing threads, and at the distance a visitor stops from a plinth
+  // that structure is right at the edge of visible, so the travelling highlight
+  // breaks into thousands of facets instead of sliding as one sheet.
   if (weave) {
     const open = spec.fabric === "tulle" || spec.fabric === "lace" || spec.fabric === "chiffon";
     material.normalMap = open ? weave.open : weave.fine;
-    // Deeper relief on a matte, chunky cloth; barely there on a fluid one that
-    // is meant to look poured rather than woven.
     const depth = spec.fabric === "velvet" ? 0.5 : open ? 0.42 : 0.24;
     material.normalScale = new three.Vector2(depth, depth);
   }
 
-  // Satin and beading get a lacquer coat, which is what produces the hard
-  // highlight that slides across the fabric as you walk past it.
   if (spec.fabric === "satin" || spec.fabric === "beaded") {
     material.clearcoat = spec.sheen;
     material.clearcoatRoughness = 0.12;
   }
 
-  // Note what is deliberately NOT here: transparency.
-  //
-  // Tulle and chiffon are sheer, and the obvious move is to make the whole gown
-  // translucent. It is wrong twice over. Physically, a tulle skirt is an opaque
-  // lining with sheer layers gathered over it — you cannot see the wearer's legs
-  // through a ballgown. And technically, two stacked depth-writing transparent
-  // surfaces cannot be sorted reliably, so they punch holes in each other and
-  // the stand shows through the skirt.
-  //
-  // So the body of every gown is opaque, and sheerness is expressed by the one
-  // thing that is genuinely sheer: the overlay in `buildGarment`.
+  // Deliberately not transparent, even for tulle. Physically a sheer skirt is an
+  // opaque lining with gauze gathered over it — you cannot see legs through a
+  // ballgown — and technically two stacked depth-writing transparent surfaces
+  // cannot be sorted, so they punch holes in each other. Sheerness is expressed
+  // by the one genuinely sheer thing: the overlay in buildGarment.
   return material;
 }
 
@@ -186,8 +84,7 @@ function clothMaterial(
  * The tailor's form the gown hangs on.
  *
  * A dress form, not a human figure — a shop displays gowns on a stand, and a
- * mannequin with a face invites the viewer to judge the face. Linen bust, brass
- * neck stem, turned wooden foot.
+ * mannequin with a face invites the viewer to judge the face.
  */
 function dressForm(three: typeof THREE, group: THREE.Group, track: Disposables) {
   const linen = new three.MeshPhysicalMaterial({
@@ -208,36 +105,23 @@ function dressForm(three: typeof THREE, group: THREE.Group, track: Disposables) 
   });
   track.materials.push(linen, brass, walnut);
 
-  // The torso: shoulder, bust, waist, hip, cut off at the top of the skirt.
-  const torsoProfile = [
-    [0.2, 0.0],
-    [0.21, 0.1],
-    [0.185, 0.22],
-    [0.168, 0.34],
-    [0.196, 0.46],
-    [0.204, 0.56],
-    [0.17, 0.66],
-    [0.11, 0.72]
-  ].map(([radius, height]) => new three.Vector2(radius * FORM_SCALE, height));
-
-  const torso = new three.LatheGeometry(torsoProfile, 48);
+  const torso = buildFormGeometry(three, FORM_SCALE, 0.78);
   track.geometries.push(torso);
   const torsoMesh = new three.Mesh(torso, linen);
-  torsoMesh.position.y = 0.74;
+  torsoMesh.position.y = 0.72;
   torsoMesh.castShadow = true;
   group.add(torsoMesh);
 
-  // Brass stem down to the foot.
-  const stem = new three.CylinderGeometry(0.018, 0.018, 0.74, 12);
+  const stem = new three.CylinderGeometry(0.016, 0.016, 0.72, 12);
   track.geometries.push(stem);
   const stemMesh = new three.Mesh(stem, brass);
-  stemMesh.position.y = 0.37;
+  stemMesh.position.y = 0.36;
   group.add(stemMesh);
 
-  const foot = new three.CylinderGeometry(0.17, 0.2, 0.045, 32);
+  const foot = new three.CylinderGeometry(0.15, 0.185, 0.04, 32);
   track.geometries.push(foot);
   const footMesh = new three.Mesh(foot, walnut);
-  footMesh.position.y = 0.022;
+  footMesh.position.y = 0.02;
   footMesh.castShadow = true;
   group.add(footMesh);
 }
@@ -269,50 +153,46 @@ export function buildGarment(
 
   dressForm(three, group, disposables);
 
-  // The gown. Radial segments are generous because the folds are carried in the
-  // vertices — too few and the silhouette reads as a polygon at close range,
-  // and in a walkable room the visitor gets very close.
-  const profile = smoothProfile(three, silhouetteProfile(spec), 64);
-  const cloth = new three.LatheGeometry(profile, 96);
-  foldGeometry(cloth, spec);
+  const cloth = buildClothGeometry(three, spec, {
+    height: GOWN_HEIGHT,
+    radius: GOWN_RADIUS
+  });
   disposables.geometries.push(cloth);
 
   const material = clothMaterial(three, spec, weave);
   disposables.materials.push(material);
 
   const gown = new three.Mesh(cloth, material);
-  gown.position.y = HEM_LIFT;
   gown.castShadow = true;
   gown.receiveShadow = true;
   group.add(gown);
 
-  // Tulle is layers. One sweep of it looks like a plastic cone; the second,
-  // slightly wider and softer, is what reads as a skirt you could rustle.
+  // Tulle is layers. One skirt of it looks like a plastic cone; a second, wider
+  // and softer and sheer, is what reads as something you could rustle.
   if (spec.fabric === "tulle") {
-    const overProfile = smoothProfile(three, silhouetteProfile(spec), 64).map(
-      (point) => new three.Vector2(point.x * 1.06, point.y * 0.98)
+    const over = buildClothGeometry(
+      three,
+      // A different seed gives the overlay its own fold pattern, so the two
+      // layers cross rather than sitting in register — which is the entire
+      // visual point of an overlay.
+      { ...spec, seed: (spec.seed + 0.41) % 1, folds: Math.round(spec.folds * 0.55) },
+      { height: GOWN_HEIGHT * 0.985, radius: GOWN_RADIUS * 1.05, rings: 56, columns: 96 }
     );
-    const over = new three.LatheGeometry(overProfile, 72);
-    foldGeometry(over, { ...spec, folds: Math.round(spec.folds * 0.6), seed: spec.seed + 0.3 });
     disposables.geometries.push(over);
 
-    // The sheer layer, and the only transparent surface on the gown. It does not
-    // write depth: it is gauze floating over the lining, so it must never
-    // occlude what is behind it, including the rest of itself.
     const overMaterial = material.clone();
     overMaterial.transparent = true;
     overMaterial.opacity = 0.42;
+    // Gauze floating over a lining: it must never occlude, including itself.
     overMaterial.depthWrite = false;
     overMaterial.roughness = Math.min(spec.roughness + 0.15, 1);
     disposables.materials.push(overMaterial);
 
-    const overlay = new three.Mesh(over, overMaterial);
-    overlay.position.y = HEM_LIFT;
-    group.add(overlay);
+    group.add(new three.Mesh(over, overMaterial));
   }
 
-  // Beading is not a texture at this range — it is points of light caught on
-  // the bodice. A sparse instanced scatter costs almost nothing and is the
+  // Beading is not a texture at this range — it is points of light caught on the
+  // bodice. A sparse instanced scatter costs almost nothing and is the
   // difference between "beaded bodice" as a claim and as a thing you can see.
   if (spec.fabric === "beaded") {
     const bead = new three.SphereGeometry(0.008, 6, 5);
@@ -324,26 +204,31 @@ export function buildGarment(
     disposables.geometries.push(bead);
     disposables.materials.push(beadMaterial);
 
-    const count = 220;
+    const count = 260;
     const beads = new three.InstancedMesh(bead, beadMaterial, count);
     const matrix = new three.Matrix4();
     const top = bodiceTop(spec);
 
     for (let index = 0; index < count; index += 1) {
-      // Deterministic scatter, from the gown's own seed — the beading sits in
-      // the same places every visit.
+      // Deterministic scatter from the gown's own seed, so the beading sits in
+      // the same places on every visit.
       const a = Math.sin(index * 12.9898 + spec.seed * 78.233) * 43758.5453;
       const b = Math.sin(index * 39.3467 + spec.seed * 11.135) * 24634.6345;
       const u = a - Math.floor(a);
       const v = b - Math.floor(b);
 
-      // Bodice only: from the waist to the neckline.
-      const heightFraction = 0.72 + v * (top - 0.74);
-      const y = heightFraction * GOWN_HEIGHT + HEM_LIFT;
+      const heightFraction = 0.7 + v * (top - 0.72);
+      const y = heightFraction * GOWN_HEIGHT;
       const theta = u * Math.PI * 2;
-      const radius = (0.3 + (1 - heightFraction) * 0.09) * GOWN_RADIUS + 0.004;
+      const radius = (0.3 + (1 - heightFraction) * 0.09) * GOWN_RADIUS + 0.005;
 
-      matrix.makeTranslation(Math.cos(theta) * radius, y, Math.sin(theta) * radius);
+      // Follows the same ellipse the bodice does, or the beading floats off the
+      // front and back of the gown.
+      matrix.makeTranslation(
+        Math.cos(theta) * radius,
+        y,
+        Math.sin(theta) * radius * DEPTH_RATIO
+      );
       beads.setMatrixAt(index, matrix);
     }
     beads.instanceMatrix.needsUpdate = true;

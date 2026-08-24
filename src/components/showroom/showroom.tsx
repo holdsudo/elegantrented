@@ -151,7 +151,7 @@ export default function Showroom({ gowns, dateQuery, onExit, onUnsupported }: Pr
       });
       tourRef.current = tour;
 
-      post = createPost(three, renderer, atelier.scene, camera, quality);
+      post = createPost(renderer, atelier.scene, camera, quality);
 
       /* ------------------------------------------------- click to walk */
 

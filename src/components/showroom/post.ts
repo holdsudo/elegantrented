@@ -32,7 +32,6 @@ import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
 import { BokehPass } from "three/examples/jsm/postprocessing/BokehPass.js";
-import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { FilmPass } from "three/examples/jsm/postprocessing/FilmPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
@@ -50,7 +49,6 @@ export type Post = {
 };
 
 export function createPost(
-  three: typeof THREE,
   renderer: THREE.WebGLRenderer,
   scene: THREE.Scene,
   camera: THREE.PerspectiveCamera,
@@ -91,16 +89,19 @@ export function createPost(
     composer.addPass(bokeh);
   }
 
-  // Bloom, kept deliberately tight. A high threshold means only the genuinely
-  // bright things bleed — the light coves, the lit archway, a hard highlight
-  // sliding across satin — rather than the whole ivory room glowing.
-  const bloom = new UnrealBloomPass(
-    new three.Vector2(window.innerWidth, window.innerHeight),
-    quality === "high" ? 0.13 : 0.1,
-    0.6,
-    0.94
-  );
-  composer.addPass(bloom);
+  // Bloom is deliberately absent.
+  //
+  // It was here, and it cost more than it gave. UnrealBloomPass blurs
+  // separably across several mip levels, and every one of those blurs clamps at
+  // the edge of the frame and accumulates there — which paints a coloured
+  // border all the way round the image. Raising the threshold above the
+  // tone-mapping range shrank it but never removed it, because the artefact is
+  // in the blur, not in what qualifies for it. Fixing it properly means
+  // rendering with an overscan margin the whole chain would then have to carry.
+  //
+  // What bloom was buying was a slight bleed on the light coves. That is the
+  // smallest of the photographic cues in this file, and not worth a frame with
+  // a pink edge on it.
 
   // Set .value, never the uniform object: the material already holds a
   // reference to it, and replacing it silently unbinds the uniform.
@@ -134,7 +135,6 @@ export function createPost(
     setSize(nextWidth: number, nextHeight: number) {
       composer.setSize(nextWidth, nextHeight);
       ao?.setSize(nextWidth, nextHeight);
-      bloom.setSize(nextWidth, nextHeight);
     },
     setFocus(distance: number) {
       if (!bokeh) return;
@@ -144,7 +144,6 @@ export function createPost(
     dispose() {
       composer.dispose();
       ao?.dispose?.();
-      bloom.dispose?.();
       vignette.dispose?.();
       film.dispose?.();
     }

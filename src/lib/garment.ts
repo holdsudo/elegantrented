@@ -69,6 +69,10 @@ const COLOURWAYS: Record<string, Palette> = {
   ivory: { base: "#F0E4D2", shadow: "#B9A588", highlight: "#FDF8EF", accent: "#CDBB9E" },
   champagne: { base: "#E7D4B4", shadow: "#AD8F5E", highlight: "#FAF1DE", accent: "#C1A472" },
   navy: { base: "#2F3F63", shadow: "#161E33", highlight: "#7285AC", accent: "#B9C4DC" },
+  // Powder blue. Matched on "blue" so "powder blue", "sky blue" and "ice blue"
+  // all land here rather than falling through to the house ivory.
+  blue: { base: "#A9C7D4", shadow: "#63838F", highlight: "#E0EDF2", accent: "#C7DDE6" },
+  plum: { base: "#63305A", shadow: "#2E1228", highlight: "#A0648C", accent: "#D9B0C6" },
   emerald: { base: "#2F6B4B", shadow: "#16352A", highlight: "#6FA98A", accent: "#B7D9C4" },
   black: { base: "#22201F", shadow: "#0C0B0B", highlight: "#5E5955", accent: "#B7ADA0" },
   burgundy: { base: "#6B2233", shadow: "#360F1B", highlight: "#A85C6C", accent: "#D8A9B3" },
@@ -115,7 +119,7 @@ const SILHOUETTES: [RegExp, Silhouette][] = [
 const FABRICS: [RegExp, Fabric][] = [
   [/\btulle\b|\borganza\b/i, "tulle"],
   [/\bsatin\b|\bmikado\b/i, "satin"],
-  [/\bbead(ed|ing)?\b|\bsequin(ed|s)?\b|\bcrystal\b/i, "beaded"],
+  [/\bbead(ed|ing)?\b|\bsequin(n?ed|s)?\b|\bcrystal\b/i, "beaded"],
   [/\bchiffon\b|\bgeorgette\b/i, "chiffon"],
   [/\bvelvet\b/i, "velvet"],
   [/\blace\b|\bguipure\b/i, "lace"],

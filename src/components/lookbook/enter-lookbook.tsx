@@ -11,7 +11,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useState } from "react";
-import type { ShowroomGown } from "./atelier";
+import type { CollectionGown } from "@/lib/collection";
 
 const Lookbook = dynamic(() => import("./lookbook"), { ssr: false });
 
@@ -19,7 +19,7 @@ export function EnterLookbook({
   gowns,
   dateQuery
 }: {
-  gowns: ShowroomGown[];
+  gowns: CollectionGown[];
   dateQuery: string;
 }) {
   const [open, setOpen] = useState(false);

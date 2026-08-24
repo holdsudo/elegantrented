@@ -12,7 +12,7 @@ import {
 } from "@/lib/queries";
 import { JsonLd, breadcrumbSchema, gownSchema } from "@/lib/schema-org";
 import { RequestForm } from "../request-form";
-import { GownStage } from "@/components/showroom/gown-stage";
+import { GownSilhouette } from "@/components/gown-silhouette";
 
 export const dynamic = "force-dynamic";
 
@@ -108,13 +108,10 @@ export default async function GownPage({
               />
             ))
           ) : (
-            // No photograph yet, so the gown itself is shown — built from its
-            // own description, on a turntable. The moment a real photo exists
-            // the branch above wins and this never renders.
-            <GownStage
-              gown={{ id: gown.id, description: gown.description, color: gown.color }}
-              fallbackLabel={gown.number}
-            />
+            // No photograph yet, so the gown is drawn from its own description
+            // — the same silhouette the catalogue card and the lookbook use.
+            // The moment a real photo exists the branch above wins.
+            <GownSilhouette gown={gown} className="lux-drawn" />
           )}
         </div>
 

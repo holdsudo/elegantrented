@@ -4,9 +4,8 @@ import { formatMoney } from "@/lib/money";
 import { getSettings, settingNumber } from "@/lib/settings";
 import { firstPhotoIds, listPublicGowns, pendingRequestCounts, takenGownIds } from "@/lib/queries";
 import { JsonLd, breadcrumbSchema, collectionSchema } from "@/lib/schema-org";
-import { EnterAtelier } from "@/components/showroom/enter-atelier";
-import { EnterLookbook } from "@/components/showroom/enter-lookbook";
-import type { ShowroomGown } from "@/components/showroom/atelier";
+import { EnterLookbook } from "@/components/lookbook/enter-lookbook";
+import type { CollectionGown } from "@/lib/collection";
 import { GownSilhouette } from "@/components/gown-silhouette";
 
 export const dynamic = "force-dynamic";
@@ -77,11 +76,11 @@ export default async function BrowsePage({
   const thumbnails = await firstPhotoIds(filtered.map((gown) => gown.id));
   const availableCount = filtered.filter((gown) => !taken.has(gown.id)).length;
 
-  // The same gowns the catalogue below lists, in the shape the showroom wants.
-  // Built here on the server so the room needs no extra request to open, and
-  // deliberately derived from `filtered` — walking the atelier shows exactly
-  // what the visitor filtered for, never a different collection.
-  const showroomGowns: ShowroomGown[] = filtered.map((gown) => ({
+  // The same gowns the catalogue below lists, in the shape the lookbook wants.
+  // Built here on the server so it needs no extra request to open, and
+  // deliberately derived from `filtered` — stepping inside shows exactly what
+  // the visitor filtered for, never a different collection.
+  const collection: CollectionGown[] = filtered.map((gown) => ({
     id: gown.id,
     number: gown.number,
     description: gown.description,
@@ -122,11 +121,7 @@ export default async function BrowsePage({
             {/* The room first, the list second — but the list is a plain anchor
                 to server-rendered markup, so it works with no JavaScript at
                 all and the door simply does not appear. */}
-            {/* The photographs first. They are the real thing; the modelled
-                room is the fallback for a collection that has not been shot
-                yet, not the headline. */}
-            <EnterLookbook gowns={showroomGowns} dateQuery={dateQuery} />
-            <EnterAtelier gowns={showroomGowns} dateQuery={dateQuery} />
+            <EnterLookbook gowns={collection} dateQuery={dateQuery} />
             <a href="#collection" className="btn-lux ghost">
               The collection
             </a>

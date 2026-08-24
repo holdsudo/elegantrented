@@ -25,10 +25,10 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { garmentSpec } from "@/lib/garment";
 import { GownSilhouette } from "@/components/gown-silhouette";
-import type { ShowroomGown } from "./atelier";
+import type { CollectionGown } from "@/lib/collection";
 
 type Props = {
-  gowns: ShowroomGown[];
+  gowns: CollectionGown[];
   dateQuery: string;
   onExit: () => void;
 };

@@ -124,6 +124,74 @@ function largestRegion(mask: Uint8Array, width: number, height: number): Uint8Ar
   return out;
 }
 
+
+/**
+ * Shrink a mask by `radius`, then grow it back — a morphological opening.
+ *
+ * This is what severs the gown from the room. Keying by hue leaves the wood
+ * floor attached under the hem, because a warm floor lit by the same lamp
+ * shares enough of the gown's hue at the boundary to bridge across; and once
+ * the floor is attached, anything the floor touches comes too. The bridges are
+ * only a few pixels wide, so eroding breaks them, the largest surviving region
+ * is the gown alone, and dilating restores its true outline.
+ *
+ * Growing back is clamped to the original mask so the outline can never end up
+ * larger than what was actually keyed.
+ */
+function openMask(
+  mask: Uint8Array,
+  width: number,
+  height: number,
+  radius: number
+): Uint8Array {
+  const erode = (source: Uint8Array) => {
+    const out = new Uint8Array(width * height);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const pixel = y * width + x;
+        if (!source[pixel]) continue;
+        // A pixel survives only if all four neighbours are also set, so an
+        // isthmus one pixel wide disappears on the first pass.
+        const kept =
+          x > 0 && source[pixel - 1] &&
+          x < width - 1 && source[pixel + 1] &&
+          y > 0 && source[pixel - width] &&
+          y < height - 1 && source[pixel + width];
+        out[pixel] = kept ? 1 : 0;
+      }
+    }
+    return out;
+  };
+
+  const dilate = (source: Uint8Array, within: Uint8Array) => {
+    const out = new Uint8Array(width * height);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const pixel = y * width + x;
+        if (source[pixel]) {
+          out[pixel] = 1;
+          continue;
+        }
+        if (!within[pixel]) continue;
+        const touching =
+          (x > 0 && source[pixel - 1]) ||
+          (x < width - 1 && source[pixel + 1]) ||
+          (y > 0 && source[pixel - width]) ||
+          (y < height - 1 && source[pixel + width]);
+        out[pixel] = touching ? 1 : 0;
+      }
+    }
+    return out;
+  };
+
+  let shrunk = mask;
+  for (let step = 0; step < radius; step += 1) shrunk = erode(shrunk);
+
+  let core = largestRegion(shrunk, width, height);
+  for (let step = 0; step < radius; step += 1) core = dilate(core, mask);
+  return core;
+}
+
 /**
  * Read the gown's own colour, from the middle of the frame.
  *
@@ -235,7 +303,10 @@ export async function loadCutout(
           : 0;
     }
 
-    keep = largestRegion(mask, width, height);
+    // Open before choosing the region: the floor is joined to the hem by a
+    // few pixels of shared warm hue, and without breaking that bridge the
+    // "largest region" is the gown AND the room it is standing in.
+    keep = openMask(mask, width, height, 3);
 
     // Recover the pale highlights on tulle and satin, which lose their hue
     // where they blow out. Strictly bright AND desaturated: a wood floor is
@@ -255,14 +326,17 @@ export async function loadCutout(
         if (!touching) continue;
 
         const [hue, saturation, lightness] = hsl(data, pixel * 4);
-        if (lightness > 0.72 && (saturation < 0.18 || hueGap(hue, subject.hue) < 26)) {
+        // Bright AND either genuinely colourless or still the gown's own hue.
+        // A wood floor is bright and warm, and a looser test here is precisely
+        // what let it back in after the opening had removed it.
+        if (lightness > 0.72 && (saturation < 0.13 || hueGap(hue, subject.hue) < 22)) {
           add.push(pixel);
         }
       }
       for (const pixel of add) keep[pixel] = 1;
     }
 
-    keep = largestRegion(keep, width, height);
+    keep = openMask(keep, width, height, 2);
   } else {
     /* ------------------------------------ keyed by flooding the backdrop */
 
@@ -337,7 +411,7 @@ export async function loadCutout(
     for (let pixel = 0; pixel < width * height; pixel += 1) {
       foreground[pixel] = background[pixel] ? 0 : 1;
     }
-    keep = largestRegion(foreground, width, height);
+    keep = openMask(foreground, width, height, 2);
   }
 
   /* ------------------------------------------------- alpha, edge, crop */

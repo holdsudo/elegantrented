@@ -5,6 +5,7 @@ import { getSettings, settingNumber } from "@/lib/settings";
 import { firstPhotoIds, listPublicGowns, pendingRequestCounts, takenGownIds } from "@/lib/queries";
 import { JsonLd, breadcrumbSchema, collectionSchema } from "@/lib/schema-org";
 import { EnterAtelier } from "@/components/showroom/enter-atelier";
+import { EnterLookbook } from "@/components/showroom/enter-lookbook";
 import type { ShowroomGown } from "@/components/showroom/atelier";
 import { GownSilhouette } from "@/components/gown-silhouette";
 
@@ -121,9 +122,13 @@ export default async function BrowsePage({
             {/* The room first, the list second — but the list is a plain anchor
                 to server-rendered markup, so it works with no JavaScript at
                 all and the door simply does not appear. */}
+            {/* The photographs first. They are the real thing; the modelled
+                room is the fallback for a collection that has not been shot
+                yet, not the headline. */}
+            <EnterLookbook gowns={showroomGowns} dateQuery={dateQuery} />
             <EnterAtelier gowns={showroomGowns} dateQuery={dateQuery} />
             <a href="#collection" className="btn-lux ghost">
-              View the collection
+              The collection
             </a>
             {settings.shopPhone ? (
               <a href={`tel:${settings.shopPhone.replace(/[^\d+]/g, "")}`} className="btn-lux ghost">

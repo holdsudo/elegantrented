@@ -13,6 +13,7 @@ import {
   listRentalsForGown
 } from "@/lib/queries";
 import { deleteGownAction, deletePhotoAction } from "../actions";
+import { withBase } from "@/lib/base-path";
 
 export const dynamic = "force-dynamic";
 
@@ -256,7 +257,7 @@ export default async function GownDetailPage({ params }: { params: Promise<{ id:
               {photos.map((photo) => (
                 <figure key={photo.id}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`/api/photos/${photo.id}`} alt={gown.description} />
+                  <img src={withBase(`/api/photos/${photo.id}`)} alt={gown.description} />
                   <form action={deletePhotoAction}>
                     <input type="hidden" name="photoId" value={photo.id} />
                     <input type="hidden" name="gownId" value={gown.id} />

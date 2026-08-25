@@ -1,4 +1,5 @@
 import { listSettings, upsertSetting } from "@/lib/queries";
+import { BASE_PATH } from "@/lib/base-path";
 
 /**
  * Every piece of branding and every default lives here, never in code.
@@ -51,4 +52,18 @@ export async function setSetting(key: SettingKey, value: string) {
 export function settingNumber(settings: Settings, key: SettingKey, fallback: number): number {
   const parsed = Number.parseInt(settings[key], 10);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+/**
+ * The public prefix every absolute URL is built from: the origin recorded in
+ * `siteUrl`, plus the sub-path the app is mounted at. `siteUrl` holds the origin
+ * alone — the base path comes from the build — but a value that already carries
+ * the prefix is left as-is so an operator can paste a full URL without breaking
+ * every canonical tag.
+ */
+export function siteBase(settings: { siteUrl?: string }): string {
+  const origin = settings.siteUrl?.replace(/\/+$/, "") ?? "";
+  if (!origin) return "";
+  if (!BASE_PATH || origin.endsWith(BASE_PATH)) return origin;
+  return `${origin}${BASE_PATH}`;
 }

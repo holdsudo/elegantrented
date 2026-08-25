@@ -4,6 +4,7 @@ import { formatDay, relativeDay, today } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { getSettings } from "@/lib/settings";
 import { listCustomerRollups } from "@/lib/queries";
+import { withBase } from "@/lib/base-path";
 
 export const metadata = { title: "Customers" };
 export const dynamic = "force-dynamic";
@@ -66,7 +67,7 @@ export default async function CustomersPage({
 
         <div className="card">
           <div className="card-head">
-            <form className="search-bar" action="/customers" method="get">
+            <form className="search-bar" action={withBase("/customers")} method="get">
               <input
                 type="search"
                 name="q"

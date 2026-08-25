@@ -7,6 +7,7 @@ import { JsonLd, breadcrumbSchema, collectionSchema } from "@/lib/schema-org";
 import { CollectionReel } from "@/components/lookbook/collection-reel";
 import type { CollectionGown } from "@/lib/collection";
 import { GownSilhouette } from "@/components/gown-silhouette";
+import { withBase } from "@/lib/base-path";
 
 export const dynamic = "force-dynamic";
 
@@ -87,7 +88,7 @@ export default async function BrowsePage({
     color: gown.color,
     size: gown.size,
     price: formatMoney(gown.priceCents, settings.currency),
-    photoUrl: thumbnails.get(gown.id) ? `/api/public/photos/${thumbnails.get(gown.id)}` : null,
+    photoUrl: thumbnails.get(gown.id) ? withBase(`/api/public/photos/${thumbnails.get(gown.id)}`) : null,
     availability: partyDate ? (taken.has(gown.id) ? "taken" : "free") : "unknown"
   }));
 
@@ -134,7 +135,7 @@ export default async function BrowsePage({
           <h2>Every gown, and exactly when it&apos;s free.</h2>
         </div>
 
-        <form className="shop-filters" action="/browse" method="get">
+        <form className="shop-filters" action={withBase("/browse")} method="get">
           <div className="field">
             <label htmlFor="date">Date of party</label>
             <input
@@ -196,7 +197,7 @@ export default async function BrowsePage({
                     {thumbnailId ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={`/api/public/photos/${thumbnailId}`}
+                        src={withBase(`/api/public/photos/${thumbnailId}`)}
                         alt={`${gown.description}${gown.color ? `, ${gown.color}` : ""}${gown.size ? `, size ${gown.size}` : ""}`}
                         loading="lazy"
                       />

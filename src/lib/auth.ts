@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { findUserByLogin, findUserById } from "@/lib/queries";
+import { BASE_PATH } from "@/lib/base-path";
 
 /**
  * Signed-cookie sessions, carried over from the CRM's lib/auth.ts:
@@ -81,14 +82,17 @@ export async function startSession(userId: string, sessionVersion: number) {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
-    path: "/",
+    // Scoped to the app's own sub-path. The domain also serves unrelated sites
+    // from other paths, and none of them have any business seeing this cookie.
+    path: BASE_PATH || "/",
     maxAge: SESSION_MAX_AGE
   });
 }
 
 export async function endSession() {
   const store = await cookies();
-  store.delete(SESSION_COOKIE);
+  // Must match the path the cookie was set with, or the browser keeps it.
+  store.delete({ name: SESSION_COOKIE, path: BASE_PATH || "/" });
 }
 
 export async function getSessionUser(): Promise<SessionUser | null> {

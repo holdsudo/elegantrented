@@ -13,6 +13,7 @@ import {
 import { JsonLd, breadcrumbSchema, gownSchema } from "@/lib/schema-org";
 import { RequestForm } from "../request-form";
 import { GownSilhouette } from "@/components/gown-silhouette";
+import { withBase } from "@/lib/base-path";
 
 export const dynamic = "force-dynamic";
 
@@ -102,7 +103,7 @@ export default async function GownPage({
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 key={photo.id}
-                src={`/api/public/photos/${photo.id}`}
+                src={withBase(`/api/public/photos/${photo.id}`)}
                 alt={`${gown.description}${gown.color ? `, ${gown.color}` : ""} — view ${index + 1}`}
                 loading={index === 0 ? "eager" : "lazy"}
               />

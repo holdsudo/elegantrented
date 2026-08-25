@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { getSettings } from "@/lib/settings";
+import { getSettings, siteBase } from "@/lib/settings";
 import { listPublicGowns } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 /** Every public page, plus one entry per listed gown. */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const settings = await getSettings();
-  const site = settings.siteUrl.replace(/\/+$/, "");
+  const site = siteBase(settings);
 
   let gowns: Awaited<ReturnType<typeof listPublicGowns>> = [];
   try {

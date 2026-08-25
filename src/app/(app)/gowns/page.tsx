@@ -5,6 +5,7 @@ import { formatMoney } from "@/lib/money";
 import { getSettings, settingNumber } from "@/lib/settings";
 import { occupiedWindow } from "@/lib/rentals";
 import { GownSilhouette } from "@/components/gown-silhouette";
+import { withBase } from "@/lib/base-path";
 
 export const metadata = { title: "Gowns" };
 export const dynamic = "force-dynamic";
@@ -47,7 +48,7 @@ export default async function GownsPage({
       </div>
 
       <div className="page">
-        <form className="search-bar" action="/gowns" method="get">
+        <form className="search-bar" action={withBase("/gowns")} method="get">
           <input
             type="search"
             name="q"
@@ -95,7 +96,7 @@ export default async function GownsPage({
                   <div className="gown-thumb">
                     {thumbnailId ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={`/api/photos/${thumbnailId}`} alt={gown.description} />
+                      <img src={withBase(`/api/photos/${thumbnailId}`)} alt={gown.description} />
                     ) : (
                       <GownSilhouette gown={gown} className="gown-sil" />
                     )}

@@ -1,7 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond, Inter } from "next/font/google";
 import "./globals.css";
-import { getSettings, SETTING_DEFAULTS } from "@/lib/settings";
+import { getSettings, SETTING_DEFAULTS, siteBase } from "@/lib/settings";
+import { withBase } from "@/lib/base-path";
 
 /**
  * Fonts are self-hosted by next/font at build time — no request to Google from
@@ -42,10 +43,14 @@ export async function generateMetadata(): Promise<Metadata> {
 
   const brand = settings.brandName;
   const tagline = settings.brandTagline;
-  const site = settings.siteUrl?.replace(/\/+$/, "") || undefined;
+  const site = siteBase(settings) || undefined;
   const description = `${brand} — ${tagline} Browse the collection, choose your date, and reserve by request. Every booking confirmed personally.`;
 
   return {
+    // metadataBase carries the origin AND the sub-path the app is mounted at.
+    // Next.js joins it with the relative URLs below (canonical, og:url, og:image),
+    // so those stay un-prefixed — running them through withBase() doubles the path.
+    // Icons and the manifest are emitted verbatim, so those DO use withBase().
     ...(site ? { metadataBase: new URL(site) } : {}),
     title: { default: `${brand} — ${tagline}`, template: `%s · ${brand}` },
     description,
@@ -67,13 +72,13 @@ export async function generateMetadata(): Promise<Metadata> {
     category: "shopping",
     referrer: "origin-when-cross-origin",
     alternates: { canonical: "/" },
-    manifest: "/manifest.webmanifest",
+    manifest: withBase("/manifest.webmanifest"),
     icons: {
       icon: [
-        { url: "/icon.svg", type: "image/svg+xml" },
-        { url: "/favicon.ico", sizes: "any" }
+        { url: withBase("/icon.svg"), type: "image/svg+xml" },
+        { url: withBase("/favicon.ico"), sizes: "any" }
       ],
-      apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }]
+      apple: [{ url: withBase("/apple-touch-icon.png"), sizes: "180x180" }]
     },
     openGraph: {
       type: "website",

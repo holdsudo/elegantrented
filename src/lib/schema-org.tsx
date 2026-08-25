@@ -1,4 +1,5 @@
 import type { Settings } from "@/lib/settings";
+import { siteBase } from "@/lib/settings";
 import type { Gown } from "@/lib/queries";
 
 /**
@@ -10,7 +11,7 @@ import type { Gown } from "@/lib/queries";
  */
 
 function site(settings: Settings) {
-  return settings.siteUrl.replace(/\/+$/, "");
+  return siteBase(settings);
 }
 
 function prune<T extends Record<string, unknown>>(input: T): T {

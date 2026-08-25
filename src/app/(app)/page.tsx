@@ -17,6 +17,7 @@ import {
   paymentState,
   statusLabel
 } from "@/lib/rentals";
+import { withBase } from "@/lib/base-path";
 
 export const dynamic = "force-dynamic";
 
@@ -143,7 +144,7 @@ export default async function LedgerPage({
 
         <div className="card">
           <div className="card-head">
-            <form className="search-bar" action="/" method="get">
+            <form className="search-bar" action={withBase("/")} method="get">
               <input type="hidden" name="filter" value={filter} />
               <input
                 type="search"

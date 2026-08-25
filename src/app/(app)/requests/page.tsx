@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { addDays, formatDay, formatDayWithWeekday, relativeDay, today } from "@/lib/dates";
-import { getSettings, settingNumber } from "@/lib/settings";
+import { getSettings, settingNumber, siteBase } from "@/lib/settings";
 import { gownLabel, occupiedWindow } from "@/lib/rentals";
 import { listRequests, takenGownIds } from "@/lib/queries";
 import {
@@ -52,7 +52,7 @@ export default async function RequestsPage({
           <Link href={showAll ? "/requests" : "/requests?show=all"} className="btn small">
             {showAll ? "Pending only" : "Show all"}
           </Link>
-          <a href="/browse" target="_blank" rel="noreferrer" className="btn small">
+          <a href={`${siteBase(settings)}/browse`} target="_blank" rel="noreferrer" className="btn small">
             View the shop ↗
           </a>
         </div>
@@ -74,7 +74,7 @@ export default async function RequestsPage({
             <strong>{showAll ? "No requests yet" : "Nothing waiting"}</strong>
             <span>
               Requests from the website land here. Share{" "}
-              <a href="/browse" target="_blank" rel="noreferrer">
+              <a href={`${siteBase(settings)}/browse`} target="_blank" rel="noreferrer">
                 the shop page
               </a>{" "}
               to start taking them.

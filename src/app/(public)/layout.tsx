@@ -39,15 +39,6 @@ export default async function PublicLayout({ children }: { children: React.React
             <a href={`tel:${settings.shopPhone.replace(/[^\d+]/g, "")}`}>{settings.shopPhone}</a>
           ) : null}
           {settings.shopEmail ? <a href={`mailto:${settings.shopEmail}`}>{settings.shopEmail}</a> : null}
-
-          {/* TEMPORARY — remove this Link to take the back office off the storefront.
-              A convenience door while the site is being shown around; the CRM is
-              still behind the same login either way, so this reveals nothing that
-              wasn't already reachable at /login. Uses the existing .btn styles, so
-              deleting these lines leaves no orphaned CSS. */}
-          <Link href="/login" className="btn small">
-            CRM
-          </Link>
         </nav>
       </header>
 

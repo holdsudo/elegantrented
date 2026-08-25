@@ -28,7 +28,8 @@
   // first. Both of these are managed by Cloudflare now.
   "routes": [
     { "pattern": "elegantrented.com", "custom_domain": true },
-    { "pattern": "www.elegantrented.com", "custom_domain": true }
+    { "pattern": "www.elegantrented.com", "custom_domain": true },
+    { "pattern": "crm.elegantrented.com", "custom_domain": true }
   ],
 
   // The database. `database_id` is filled in by `wrangler d1 create rental-ledger`.

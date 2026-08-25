@@ -2,7 +2,7 @@
  * Renders the brand assets into public/: the social card, the app icons and the
  * favicon. Run it again whenever the wordmark or palette changes.
  *
- *   node scripts/make-brand-assets.mjs "Elegant Rental" "Couture gowns, rented beautifully."
+ *   node scripts/make-brand-assets.mjs "Elegant Rented" "Couture gowns, rented beautifully."
  *
  * Chrome does the rendering; sips does the resizing. Both are already here.
  */
@@ -16,7 +16,7 @@ import { randomUUID } from "crypto";
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const PUBLIC = "public";
 
-const BRAND = process.argv[2] ?? "Elegant Rental";
+const BRAND = process.argv[2] ?? "Elegant Rented";
 const TAGLINE = process.argv[3] ?? "Couture gowns, rented beautifully.";
 
 const INK = "#14100D";

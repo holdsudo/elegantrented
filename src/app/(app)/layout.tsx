@@ -6,7 +6,7 @@ import { Nav, type NavItem } from "@/components/nav";
 import { primaryTheme } from "@/lib/color";
 import { logoutAction } from "@/app/login/actions";
 
-/** "Elegant Rental" -> "ER" */
+/** "Elegant Rented" -> "ER" */
 function brandInitials(name: string) {
   return name
     .split(/\s+/)

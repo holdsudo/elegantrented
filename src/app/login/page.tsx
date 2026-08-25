@@ -9,7 +9,7 @@ export const metadata = {
   robots: { index: false, follow: false }
 };
 
-/** "Elegant Rental" -> "ER" */
+/** "Elegant Rented" -> "ER" */
 function initials(name: string) {
   return name
     .split(/\s+/)

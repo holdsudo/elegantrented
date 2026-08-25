@@ -168,7 +168,7 @@ async function main() {
     // schema.org structured data, and an invented street would publish a
     // location that does not exist.
     const settings: Record<string, string> = {
-      brandName: "Elegant Rental",
+      brandName: "Elegant Rented",
       brandTagline: "Couture gowns, rented beautifully.",
       brandPrimary: "#B08D57",
       shopPhone: "(201) 555-0142",

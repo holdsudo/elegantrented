@@ -6,7 +6,7 @@ import { BASE_PATH } from "@/lib/base-path";
  * Renaming the shop or changing the primary color is one row.
  */
 export const SETTING_DEFAULTS = {
-  brandName: "Elegant Rental",
+  brandName: "Elegant Rented",
   brandTagline: "Couture gowns, rented beautifully.",
   brandPrimary: "#B08D57",
   currency: "USD",

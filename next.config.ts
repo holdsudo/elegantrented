@@ -1,23 +1,30 @@
 import type { NextConfig } from "next";
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
-// The app lives at joe-miz.com/elegantrented, behind a proxy Worker on the zone
-// that owns that domain. Everything Next.js generates — routes, /_next assets,
-// the server-action endpoints — has to carry the prefix, which is what basePath
-// does. Paths we write by hand go through withBase() in src/lib/base-path.ts.
-const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "/elegantrented";
+// The app has its own domain now and is served from the root of it, so there is
+// no prefix to carry. The plumbing for sub-path hosting is still in place —
+// withBase() is a no-op while this is empty — so setting NEXT_PUBLIC_BASE_PATH
+// is all it takes to mount it under a path again.
+//
+// Imported, never redeclared: a second copy of this default drifted from the
+// first once and 404'd every gown photo in production.
+import { BASE_PATH as basePath } from "./src/lib/base-path";
 
 const nextConfig: NextConfig = {
-  basePath,
+  ...(basePath ? { basePath } : {}),
   experimental: {
     // Gown photos arrive as multipart form data on a server action.
     serverActions: {
       bodySizeLimit: "12mb",
-      // The browser talks to joe-miz.com while the Worker answers as itself, so
-      // the Origin header never matches the host Next.js sees. Without these,
-      // every server action — login, the booking request, each save in the back
-      // office — is rejected as a cross-site POST.
-      allowedOrigins: ["joe-miz.com", "rental-ledger.elegentrented.workers.dev", "localhost:3400"]
+      // Server actions are rejected as cross-site when the Origin the browser
+      // sends doesn't match the host the Worker answers as — which is the case
+      // on the workers.dev URL and anywhere the app sits behind a proxy.
+      allowedOrigins: [
+        "elegantrented.com",
+        "www.elegantrented.com",
+        "rental-ledger.elegentrented.workers.dev",
+        "localhost:3400"
+      ]
     }
   }
 };

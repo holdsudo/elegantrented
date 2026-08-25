@@ -16,6 +16,20 @@
     "enabled": true
   },
 
+  // The workers.dev URL stays on. Declaring "routes" alone silently turns it
+  // off, which took every URL down once — keep this explicit.
+  "workers_dev": true,
+
+  // The app's own domain. custom_domain lets the Worker answer for the hostname
+  // directly — Cloudflare creates and manages the DNS record itself — which is
+  // only possible because the zone lives in the same account as the Worker.
+  // Cloudflare refuses to take over a hostname that already has its own DNS
+  // record, so each pattern here needs its record deleted from the zone first.
+  // www still has one; add it back to this list once that record is gone.
+  "routes": [
+    { "pattern": "elegantrented.com", "custom_domain": true }
+  ],
+
   // The database. `database_id` is filled in by `wrangler d1 create rental-ledger`.
   "d1_databases": [
     {

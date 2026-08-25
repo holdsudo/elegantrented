@@ -1,0 +1,17 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "elegantrented-proxy",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-01",
+
+  // This Worker is deployed to the Cloudflare account that owns joe-miz.com,
+  // NOT the account the app runs on. Routes only bind within their own account,
+  // which is the whole reason this file exists.
+  "routes": [
+    { "pattern": "joe-miz.com/elegantrented", "zone_name": "joe-miz.com" },
+    { "pattern": "joe-miz.com/elegantrented/*", "zone_name": "joe-miz.com" }
+  ],
+
+  // Nothing should reach this Worker except through the routes above.
+  "workers_dev": false
+}

@@ -24,10 +24,11 @@
   // directly — Cloudflare creates and manages the DNS record itself — which is
   // only possible because the zone lives in the same account as the Worker.
   // Cloudflare refuses to take over a hostname that already has its own DNS
-  // record, so each pattern here needs its record deleted from the zone first.
-  // www still has one; add it back to this list once that record is gone.
+  // record, so any hostname added here needs its record deleted from the zone
+  // first. Both of these are managed by Cloudflare now.
   "routes": [
-    { "pattern": "elegantrented.com", "custom_domain": true }
+    { "pattern": "elegantrented.com", "custom_domain": true },
+    { "pattern": "www.elegantrented.com", "custom_domain": true }
   ],
 
   // The database. `database_id` is filled in by `wrangler d1 create rental-ledger`.

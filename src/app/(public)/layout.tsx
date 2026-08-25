@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { getSettings } from "@/lib/settings";
+import { getSettings, SETTING_DEFAULTS } from "@/lib/settings";
 import { primaryTheme } from "@/lib/color";
 import { JsonLd, organizationSchema, websiteSchema } from "@/lib/schema-org";
+import { withBase } from "@/lib/base-path";
 
 /**
  * The storefront shell.
@@ -13,7 +14,7 @@ import { JsonLd, organizationSchema, websiteSchema } from "@/lib/schema-org";
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
   const settings = await getSettings();
   const theme =
-    settings.brandPrimary && settings.brandPrimary !== "#B08D57"
+    settings.brandPrimary && settings.brandPrimary !== SETTING_DEFAULTS.brandPrimary
       ? primaryTheme(settings.brandPrimary)
       : null;
 
@@ -29,9 +30,9 @@ export default async function PublicLayout({ children }: { children: React.React
 
       <header className="shop-head">
         <Link href="/browse" className="shop-brand" aria-label={`${settings.brandName} — home`}>
-          <span className="wordmark">{settings.brandName}</span>
-          <span className="rule" aria-hidden="true" />
-          <span className="sub">Atelier</span>
+          {/* The wordmark is the logo artwork itself, so the brand name is carried
+              by the alt text rather than by a typeface we would have to match. */}
+          <img className="shop-logo" src={withBase("/logo.png")} alt={settings.brandName} width={507} height={360} />
         </Link>
         <nav className="shop-contact">
           <Link href="/browse">The collection</Link>

@@ -8,7 +8,7 @@ import { BASE_PATH } from "@/lib/base-path";
 export const SETTING_DEFAULTS = {
   brandName: "Elegant Rented",
   brandTagline: "Couture gowns, rented beautifully.",
-  brandPrimary: "#B08D57",
+  brandPrimary: "#BE9141",
   currency: "USD",
   shopPhone: "",
   shopEmail: "",

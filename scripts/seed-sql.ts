@@ -170,7 +170,7 @@ async function main() {
     const settings: Record<string, string> = {
       brandName: "Elegant Rented",
       brandTagline: "Couture gowns, rented beautifully.",
-      brandPrimary: "#B08D57",
+      brandPrimary: "#BE9141",
       shopPhone: "(201) 555-0142",
       shopEmail: "hello@elegantrental.com",
       instagramUrl: "https://instagram.com/elegantrental"

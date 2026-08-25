@@ -19,9 +19,9 @@ const PUBLIC = "public";
 const BRAND = process.argv[2] ?? "Elegant Rented";
 const TAGLINE = process.argv[3] ?? "Couture gowns, rented beautifully.";
 
-const INK = "#14100D";
-const GOLD = "#B08D57";
-const IVORY = "#FAF7F2";
+const INK = "#131210";
+const GOLD = "#BE9141";
+const IVORY = "#F4ECE1";
 
 const FONT = `'Cormorant Garamond', 'Times New Roman', Georgia, serif`;
 const SANS = `-apple-system, 'Helvetica Neue', Arial, sans-serif`;
